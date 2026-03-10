@@ -1,0 +1,11 @@
+data/
+*.csv
+*.pkl
+*.geojson
+*.gpickle
+*.nc
+
+__pycache__/
+*.pyc
+.idea/
+.vscode/
