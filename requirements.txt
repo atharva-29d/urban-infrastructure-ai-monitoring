@@ -1,0 +1,15 @@
+pandas~=2.3.2
+torch~=2.8.0
+numpy~=2.3.2
+scikit-learn~=1.7.1
+torch-geometric~=2.7.0
+joblib~=1.5.2
+networkx~=3.5
+geopandas~=1.1.2
+xarray~=2026.1.0
+shapely~=2.1.2
+matplotlib~=3.10.6
+streamlit~=1.53.1
+pydeck~=0.9.1
+ImageIO~=2.37.2
+Django~=6.0.3
