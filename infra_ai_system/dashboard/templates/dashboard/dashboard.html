@@ -293,8 +293,32 @@ id="stepSlider">
 /* =================
 CASCADE GRAPH
 ================= */
+function updateCascadeChart(data){
 
-let cascadeData = {{ cascade.capacity_cascade|safe }}
+    new Chart(document.getElementById("cascadeChart"), {
+        type: 'line',
+        data: {
+            labels: data.map((_,i)=>i+1),
+            datasets: [{
+                label: "Failures",
+                data: data,
+                borderColor: "#3b82f6"
+            }]
+        }
+    });
+
+}
+fetch("data/graphs/run_results_weather.json")
+.then(res => res.json())
+.then(data => {
+
+    let cascadeData = data["new_failures_per_step"] || [10,30,80];
+
+    // update UI
+    document.getElementById("cascadeCount").innerText = cascadeData.length;
+
+    updateCascadeChart(cascadeData);
+});
 
 new Chart(document.getElementById('cascadeChart'),{
 
@@ -432,7 +456,12 @@ var roads = {{ roads|safe }}
 
 var map1 = L.map('map_all').setView([18.5204,73.8567],11)
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map1)
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {
+    maxZoom: 19
+  }
+).addTo(map1);
 
 L.geoJSON(roads,{style:{color:'gray',weight:2}}).addTo(map1)
 
@@ -444,7 +473,12 @@ CASCADE MAP
 
 var map2 = L.map('map_failures').setView([18.5204,73.8567],11)
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map2)
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {
+    maxZoom: 19
+  }
+).addTo(map2)
 
 var roadLayers=[]
 
@@ -502,7 +536,12 @@ REPAIR MAP
 
 var map3=L.map('map_repair').setView([18.5204,73.8567],11)
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map3)
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {
+    maxZoom: 19
+  }
+).addTo(map3)
 
 var repairLayers=[]
 
@@ -542,9 +581,19 @@ var mapBefore=L.map('map_before').setView([18.5204,73.8567],11)
 
 var mapAfter=L.map('map_after').setView([18.5204,73.8567],11)
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapBefore)
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {
+    maxZoom: 19
+  }
+).addTo(mapBefore)
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapAfter)
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {
+    maxZoom: 19
+  }
+).addTo(mapAfter)
 
 var beforeLayers=[]
 
