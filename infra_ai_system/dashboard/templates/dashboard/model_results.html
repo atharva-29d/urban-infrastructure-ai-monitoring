@@ -1,0 +1,219 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Model Results{% endblock %}
+{% block hero_title %}Model Results{% endblock %}
+{% block hero_subtitle %}Review trained model outputs, linked artifacts, and evaluation metadata for infrastructure failure prediction.{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>Model Summary</h2>
+    <div class="grid">
+        <div class="card">
+            <div class="label">Training Runs</div>
+            <div class="value">{{ model_runs|length }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Recorded Model Results</div>
+            <div class="value">{{ all_model_results|length }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Selected Severity</div>
+            <div class="value" style="font-size: 1.2rem;">{{ selected_severity.label }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Scenario</div>
+            <div class="value" style="font-size: 1.2rem;">{% if selected_scenario %}{{ selected_scenario.name }}{% else %}Pune Flood Scenario{% endif %}</div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Model Performance Chart</h2>
+    <span class="kicker">Stored Evaluation Summary</span>
+    <div class="card">
+        <canvas id="modelPerformanceChart" height="110"></canvas>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Recorded Model Results</h2>
+    <span class="kicker">Database-Backed Metrics</span>
+    {% if all_model_results %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Family</th>
+                    <th>Dataset</th>
+                    <th>Task</th>
+                    <th>ROC-AUC</th>
+                    <th>PR-AUC</th>
+                    <th>F1</th>
+                    <th>Balanced Accuracy</th>
+                    <th>Train Rows</th>
+                    <th>Test Rows</th>
+                    <th>Run</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in all_model_results %}
+                <tr>
+                    <td>{{ item.result.model_name }}</td>
+                    <td>{{ item.result.model_family }}</td>
+                    <td>{{ item.result.dataset_name }}</td>
+                    <td>{{ item.result.get_task_type_display }}</td>
+                    <td>{{ item.result.metrics.roc_auc|default:"N/A" }}</td>
+                    <td>{{ item.result.metrics.pr_auc|default:"N/A" }}</td>
+                    <td>{{ item.result.metrics.f1|default:"N/A" }}</td>
+                    <td>{{ item.result.metrics.balanced_accuracy|default:"N/A" }}</td>
+                    <td>{{ item.result.train_rows }}</td>
+                    <td>{{ item.result.test_rows }}</td>
+                    <td><a href="/runs/{{ item.run.slug }}/">{{ item.run.title }}</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No model results are stored yet.</p>
+    {% endif %}
+</section>
+
+<section class="section">
+    <h2>Candidate Model Comparison</h2>
+    <span class="kicker">Validation Search Results</span>
+    {% if model_comparison_rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Variant</th>
+                    <th>Validation ROC-AUC</th>
+                    <th>Validation PR-AUC</th>
+                    <th>Validation F1</th>
+                    <th>Threshold</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in model_comparison_rows %}
+                <tr>
+                    <td>{{ row.model_name }}</td>
+                    <td>{{ row.variant }}</td>
+                    <td>{{ row.validation_roc_auc }}</td>
+                    <td>{{ row.validation_pr_auc }}</td>
+                    <td>{{ row.validation_f1 }}</td>
+                    <td>{{ row.threshold }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No candidate-model comparison file found.</p>
+    {% endif %}
+</section>
+
+<section class="section">
+    <h2>Random Forest Feature Importance</h2>
+    <span class="kicker">Top Predictive Signals</span>
+    {% if feature_importance_rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Importance</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in feature_importance_rows %}
+                <tr>
+                    <td>{{ row.feature }}</td>
+                    <td>{{ row.importance }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No feature-importance artifact found.</p>
+    {% endif %}
+</section>
+
+<section class="section">
+    <h2>Benchmark Reference</h2>
+    <span class="kicker">Legacy Comparison</span>
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Family</th>
+                <th>Reference ROC-AUC</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in benchmark_model_metrics %}
+            <tr>
+                <td>{{ item.model_name }}</td>
+                <td>{{ item.family }}</td>
+                <td>{{ item.roc_auc }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="section">
+    <h2>Training Runs</h2>
+    {% if model_runs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Run</th>
+                    <th>Scenario</th>
+                    <th>Status</th>
+                    <th>Artifacts</th>
+                    <th>Open</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for run in model_runs %}
+                <tr>
+                    <td>{{ run.title }}</td>
+                    <td>{% if run.scenario %}{{ run.scenario.name }}{% else %}N/A{% endif %}</td>
+                    <td>{{ run.get_status_display }}</td>
+                    <td>{{ run.artifacts.count }}</td>
+                    <td><a href="/runs/{{ run.slug }}/">View</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No training runs are available.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modelLabels = {{ model_chart_labels|safe }};
+    const modelValues = {{ model_chart_values|safe }};
+
+    new Chart(document.getElementById("modelPerformanceChart"), {
+        type: "bar",
+        data: {
+            labels: modelLabels,
+            datasets: [{
+                label: "ROC-AUC",
+                data: modelValues,
+                backgroundColor: "#c65d2e"
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    suggestedMax: 1
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Run Detail{% endblock %}
+{% block hero_title %}Run Detail{% endblock %}
+{% block hero_subtitle %}Inspect one saved experiment run, its attached artifacts, and any recorded optimization or model outputs.{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>{{ run.title }}</h2>
+    <div class="grid">
+        <div class="card"><div class="label">Run ID</div><div class="value" style="font-size:1.1rem;">{{ run.run_identifier }}</div></div>
+        <div class="card"><div class="label">Type</div><div class="value" style="font-size:1.1rem;">{{ run.get_run_kind_display }}</div></div>
+        <div class="card"><div class="label">Status</div><div class="value" style="font-size:1.1rem;">{{ run.get_status_display }}</div></div>
+        <div class="card"><div class="label">Scenario</div><div class="value" style="font-size:1.1rem;">{% if run.scenario %}{{ run.scenario.name }}{% else %}N/A{% endif %}</div></div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Metrics</h2>
+    <pre>{{ run.metrics }}</pre>
+</section>
+
+<section class="section">
+    <h2>Input Summary</h2>
+    <pre>{{ run.input_summary }}</pre>
+</section>
+
+<section class="section">
+    <h2>Artifacts</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Label</th>
+                <th>Type</th>
+                <th>Format</th>
+                <th>Path</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for artifact in run.artifacts.all %}
+            <tr>
+                <td>{{ artifact.label }}</td>
+                <td>{{ artifact.get_artifact_kind_display }}</td>
+                <td>{{ artifact.file_format }}</td>
+                <td>{{ artifact.relative_path }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="4">No artifacts attached.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="section">
+    <h2>Model Results</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Family</th>
+                <th>Dataset</th>
+                <th>Task</th>
+                <th>Metrics</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for result in run.model_results.all %}
+            <tr>
+                <td>{{ result.model_name }}</td>
+                <td>{{ result.model_family }}</td>
+                <td>{{ result.dataset_name }}</td>
+                <td>{{ result.get_task_type_display }}</td>
+                <td>{{ result.metrics }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5">No model results attached.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="section">
+    <h2>Optimization Results</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Strategy</th>
+                <th>Budget K</th>
+                <th>Mean Failed</th>
+                <th>Std Failed</th>
+                <th>Resilience</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in optimization_rows %}
+            <tr>
+                <td>{{ row.strategy_name }}</td>
+                <td>{{ row.budget_k }}</td>
+                <td>{{ row.mean_failed }}</td>
+                <td>{{ row.std_failed }}</td>
+                <td>{{ row.resilience_score|default:"N/A" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5">No optimization rows for this run.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

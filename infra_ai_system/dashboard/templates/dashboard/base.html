@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Urban Infrastructure Research Dashboard{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% block head_extras %}{% endblock %}
+    <style>
+        :root {
+            --panel: #fffaf2;
+            --ink: #1f2a2e;
+            --muted: #627074;
+            --accent: #c65d2e;
+            --accent-dark: #8f3f1b;
+            --line: #dfd3bf;
+            --danger: #c53b2c;
+            --critical: #222222;
+            --safe: #4f7c67;
+        }
+
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            background: linear-gradient(180deg, #efe5d4 0%, #f8f4ed 45%, #f4efe6 100%);
+            color: var(--ink);
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 32px 20px 60px;
+        }
+
+        .hero, .section, .nav-shell {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 12px 40px rgba(70, 47, 24, 0.08);
+        }
+
+        .hero {
+            background:
+                radial-gradient(circle at top right, rgba(198, 93, 46, 0.10), transparent 32%),
+                linear-gradient(180deg, #fffdf8 0%, #fff9ef 100%);
+        }
+
+        .section, .nav-shell {
+            margin-top: 28px;
+        }
+
+        .hero h1, .section h2, .nav-shell h2 {
+            margin-top: 0;
+        }
+
+        .hero p, .subvalue {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .nav-links, .scenario-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .nav-link, .scenario-chip {
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            text-decoration: none;
+            transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+        }
+
+        .nav-link:hover, .scenario-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(70, 47, 24, 0.08);
+            border-color: #d0b993;
+        }
+
+        .nav-link.active, .scenario-chip.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 8px 18px rgba(70, 47, 24, 0.04);
+        }
+
+        .label {
+            color: var(--muted);
+            font-size: 0.92rem;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-size: 1.7rem;
+            font-weight: bold;
+        }
+
+        .kicker {
+            display: inline-block;
+            margin-bottom: 10px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(198, 93, 46, 0.10);
+            color: var(--accent-dark);
+            font-size: 0.82rem;
+            font-weight: bold;
+            letter-spacing: 0.02em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #eee3d1;
+            text-align: left;
+        }
+
+        th {
+            background: #fbf4ea;
+            font-size: 0.95rem;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            background: #eee2d2;
+        }
+
+        a {
+            color: var(--accent-dark);
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #fff;
+            border: 1px solid #eee1cf;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .grid, .grid-3 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .grid, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <section class="hero">
+        <h1>{% block hero_title %}Urban Infrastructure AI Research Dashboard{% endblock %}</h1>
+        <p>{% block hero_subtitle %}Django research interface for flood-driven cascade simulation, model analysis, and repair optimization.{% endblock %}</p>
+    </section>
+
+    <section class="nav-shell">
+        <h2>Research Navigation</h2>
+        <div class="nav-links">
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Dashboard</a>
+            <a class="nav-link {% if request.path == '/scenarios/' %}active{% endif %}" href="/scenarios/?severity={{ selected_severity.slug }}">Scenario Explorer</a>
+            <a class="nav-link {% if request.path == '/models/' %}active{% endif %}" href="/models/?severity={{ selected_severity.slug }}">Model Results</a>
+            <a class="nav-link {% if request.path == '/optimization/' %}active{% endif %}" href="/optimization/?severity={{ selected_severity.slug }}">Optimization Analysis</a>
+            <a class="nav-link {% if request.path == '/routing/' %}active{% endif %}" href="/routing/?severity={{ selected_severity.slug }}">Safe Rerouting</a>
+        </div>
+        <div class="scenario-list" style="margin-top: 16px;">
+            {% for option in severity_options %}
+                <a class="scenario-chip {% if option.slug == selected_severity.slug %}active{% endif %}"
+                   href="{{ request.path }}?severity={{ option.slug }}{% if selected_scenario %}&scenario={{ selected_scenario.slug }}{% endif %}">
+                    Scale {{ option.slug }}
+                </a>
+            {% endfor %}
+        </div>
+        <p class="subvalue" style="margin-top: 12px;">
+            Current default scale is <strong>{{ selected_severity.slug }}</strong>. You can switch scales from any page using these controls.
+        </p>
+        <form method="get" action="{{ request.path }}" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+            {% if selected_scenario %}
+                <input type="hidden" name="scenario" value="{{ selected_scenario.slug }}">
+            {% endif %}
+            <label for="custom_scale"><strong>Run custom scale:</strong></label>
+            <input
+                id="custom_scale"
+                name="custom_scale"
+                type="number"
+                min="0.1"
+                max="5"
+                step="0.1"
+                value="{% if custom_scale %}{{ custom_scale }}{% endif %}"
+                style="padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);"
+            >
+            <button type="submit" style="padding: 10px 16px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent); color: white; font-weight: bold; cursor: pointer;">
+                Simulate
+            </button>
+            {% if custom_scale %}
+                <a class="nav-link" href="{{ request.path }}?severity=0.7{% if selected_scenario %}&scenario={{ selected_scenario.slug }}{% endif %}">Reset to Presets</a>
+            {% endif %}
+        </form>
+    </section>
+
+    {% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

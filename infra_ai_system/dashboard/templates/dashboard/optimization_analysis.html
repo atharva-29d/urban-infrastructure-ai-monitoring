@@ -1,0 +1,117 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Optimization Analysis{% endblock %}
+{% block hero_title %}Optimization Analysis{% endblock %}
+{% block hero_subtitle %}Compare repair strategies, budget sensitivity, and post-failure outcomes across saved optimization runs.{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>Optimization Summary</h2>
+    <div class="grid">
+        <div class="card">
+            <div class="label">Optimization Runs</div>
+            <div class="value">{{ optimization_runs|length }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Current Failed Roads</div>
+            <div class="value">{{ failed_count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Critical Roads</div>
+            <div class="value">{{ critical_count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Severity</div>
+            <div class="value" style="font-size: 1.2rem;">{{ selected_severity.label }}</div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Budget Sensitivity Chart</h2>
+    <div class="card">
+        <canvas id="optimizationChart" height="110"></canvas>
+    </div>
+</section>
+
+{% for group in optimization_groups %}
+<section class="section">
+    <h2>{{ group.run.title }}</h2>
+    <p class="subvalue">
+        {% if group.run.scenario %}{{ group.run.scenario.name }}{% else %}No scenario attached{% endif %}
+        | {{ group.run.run_identifier }}
+    </p>
+    {% if group.rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Budget K</th>
+                    <th>Mean Failed</th>
+                    <th>Std Failed</th>
+                    <th>Resilience Score</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in group.rows %}
+                <tr>
+                    <td>{{ row.strategy_name }}</td>
+                    <td>{{ row.budget_k }}</td>
+                    <td>{{ row.mean_failed }}</td>
+                    <td>{{ row.std_failed }}</td>
+                    <td>{{ row.resilience_score|default:"N/A" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p style="margin-top: 14px;"><a href="/runs/{{ group.run.slug }}/">Open run details</a></p>
+    {% else %}
+        <p>No optimization rows are recorded for this run.</p>
+    {% endif %}
+</section>
+{% empty %}
+<section class="section">
+    <h2>Optimization Runs</h2>
+    <p>No optimization runs are available.</p>
+</section>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const optimizationLabels = {{ optimization_chart_labels|safe }};
+    const greedyValues = {{ optimization_greedy_values|safe }};
+    const randomValues = {{ optimization_random_values|safe }};
+
+    new Chart(document.getElementById("optimizationChart"), {
+        type: "line",
+        data: {
+            labels: optimizationLabels,
+            datasets: [
+                {
+                    label: "Greedy Repair",
+                    data: greedyValues,
+                    borderColor: "#c65d2e",
+                    backgroundColor: "#c65d2e",
+                    tension: 0.2
+                },
+                {
+                    label: "Random Repair",
+                    data: randomValues,
+                    borderColor: "#4f7c67",
+                    backgroundColor: "#4f7c67",
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "top"
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

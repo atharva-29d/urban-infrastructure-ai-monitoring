@@ -1,655 +1,281 @@
-<!DOCTYPE html>
+{% extends "dashboard/base.html" %}
 
-<html>
-<head>
+{% block title %}Research Dashboard{% endblock %}
 
-<title>Urban Infrastructure AI Monitoring System</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+{% block head_extras %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
 <style>
+    #road-map {
+        height: 540px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        margin-top: 14px;
+    }
 
-body{
-background:#0b1a33;
-color:white;
-font-family:Arial;
-margin:0;
-}
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 14px;
+        font-size: 0.95rem;
+        color: var(--muted);
+    }
 
-.container{
-width:90%;
-margin:auto;
-padding-top:40px;
-}
+    .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-h1{
-margin-bottom:30px;
-}
-
-.section-title{
-margin-top:70px;
-font-size:22px;
-border-bottom:2px solid #3b82f6;
-padding-bottom:10px;
-margin-bottom:25px;
-}
-
-/* cards */
-
-.cards{
-display:flex;
-gap:20px;
-flex-wrap:wrap;
-margin-bottom:20px;
-}
-
-.card{
-background:#1b2a47;
-padding:25px;
-border-radius:10px;
-flex:1;
-min-width:200px;
-box-shadow:0px 5px 15px rgba(0,0,0,0.4);
-text-align:center;
-}
-
-/* charts */
-
-.chart-container{
-height:320px;
-width:100%;
-margin-top:20px;
-background:#12203a;
-padding:20px;
-border-radius:10px;
-}
-
-/* maps */
-
-.map{
-height:420px;
-border-radius:10px;
-margin-top:15px;
-}
-
-/* button */
-
-.button{
-margin-top:20px;
-padding:10px 20px;
-background:#4ade80;
-border:none;
-border-radius:5px;
-font-weight:bold;
-cursor:pointer;
-}
-
-/* footer */
-
-footer{
-margin-top:80px;
-background:#081428;
-padding:25px;
-text-align:center;
-color:#94a3b8;
-font-size:14px;
-border-top:1px solid #1e293b;
-}
-
+    .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        display: inline-block;
+    }
 </style>
-
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>Urban Infrastructure AI Monitoring System</h1>
-
-<!-- ================= -->
-
-<!-- SYSTEM OVERVIEW -->
-
-<!-- ================= -->
-
-<h2 class="section-title">System Overview</h2>
-
-<div class="cards">
-
-<div class="card">
-<h3>📉 Cascade Steps</h3>
-<p>{{ cascade.capacity_cascade|length }}</p>
-</div>
-
-<div class="card">
-<h3>🔧 Repair Strategies</h3>
-<p>{{ optimization|length }}</p>
-</div>
-
-<div class="card">
-<h3>⚠ Risk Score</h3>
-<p id="riskScore">--</p>
-</div>
-
-<div class="card">
-<h3>🛰 System Status</h3>
-<p id="systemStatus">--</p>
-</div>
-
-</div>
-
-<!-- ================= -->
-
-<!-- AI INSIGHT PANEL -->
-
-<!-- ================= -->
-
-<div class="cards">
-
-<div class="card">
-
-<h3>🤖 AI Infrastructure Insight</h3>
-
-<p id="aiInsight"></p>
-
-</div>
-
-</div>
-
-<!-- ================= -->
-
-<!-- CASCADE GRAPH -->
-
-<!-- ================= -->
-
-<h2 class="section-title">Cascade Simulation Analysis</h2>
-
-<div class="chart-container">
-<canvas id="cascadeChart"></canvas>
-</div>
-
-<!-- ================= -->
-
-<!-- REPAIR GRAPH -->
-
-<!-- ================= -->
-
-<div class="chart-container">
-<canvas id="repairChart"></canvas>
-</div>
-
-<!-- ================= -->
-
-<!-- INFRASTRUCTURE MAP -->
-
-<!-- ================= -->
-
-<h2 class="section-title">Infrastructure Monitoring</h2>
-
-<div id="map_all" class="map"></div>
-
-<!-- ================= -->
-
-<!-- CASCADE MAP -->
-
-<!-- ================= -->
-
-<h2 class="section-title">Cascade Failure Simulation</h2>
-
-<input type="range"
-min="1"
-max="{{ cascade.capacity_cascade|length }}"
-value="1"
-id="stepSlider">
-
-<p>Simulation Step: <span id="stepValue">1</span></p>
-
-<div id="map_failures" class="map"></div>
-
-<!-- ================= -->
-
-<!-- AI REPAIR -->
-
-<!-- ================= -->
-
-<h2 class="section-title">AI Self-Healing Recommendation</h2>
-
-<div class="cards">
-
-<div class="card">
-<h3>Optimal Repair Budget</h3>
-<p id="bestBudget"></p>
-</div>
-
-<div class="card">
-<h3>Failures Prevented</h3>
-<p id="failuresPrevented"></p>
-</div>
-
-<div class="card">
-<h3>Repair Strategy</h3>
-<p>Greedy Optimization</p>
-</div>
-
-</div>
-
-<button class="button" onclick="applyRepairs()">Apply AI Repairs</button>
-
-<!-- ================= -->
-
-<!-- REPAIR MAP -->
-
-<!-- ================= -->
-
-<div id="map_repair" class="map"></div>
-
-<!-- ================= -->
-
-<!-- BEFORE AFTER -->
-
-<!-- ================= -->
-
-<h2 class="section-title">Self-Healing Infrastructure Simulation</h2>
-
-<p>Left: Network after cascade failures | Right: Network after AI repair optimization</p>
-
-<div style="display:flex; gap:20px; flex-wrap:wrap;">
-
-<div style="flex:1; min-width:400px;">
-<h3>Before AI Repair</h3>
-<div id="map_before" class="map"></div>
-</div>
-
-<div style="flex:1; min-width:400px;">
-<h3>After AI Repair</h3>
-<div id="map_after" class="map"></div>
-</div>
-
-</div>
-
-</div>
-
-<!-- ================= -->
-
-<!-- FOOTER -->
-
-<!-- ================= -->
-
-<footer>
-
-<p>Urban Infrastructure AI Monitoring System</p>
-
-<p>AI-driven predictive monitoring and self-healing simulation</p>
-
-<p>Atharva • AIML Engineering Project</p>
-
-</footer>
-
+{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>Scenario Selector</h2>
+    <div class="scenario-list">
+        {% for scenario in scenarios %}
+            <a class="scenario-chip {% if selected_scenario and scenario.id == selected_scenario.id %}active{% endif %}"
+               href="/?scenario={{ scenario.slug }}&severity={{ selected_severity.slug }}">
+                {{ scenario.name }} ({{ scenario.run_count }} runs)
+            </a>
+        {% empty %}
+            <span>No scenarios available yet.</span>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="section">
+    <h2>Severity Selector</h2>
+    <div class="scenario-list">
+        {% for option in severity_options %}
+            <a class="scenario-chip {% if option.slug == selected_severity.slug %}active{% endif %}"
+               href="/?scenario={% if selected_scenario %}{{ selected_scenario.slug }}{% endif %}&severity={{ option.slug }}">
+                {{ option.label }}
+            </a>
+        {% endfor %}
+    </div>
+    <p class="subvalue">The map and cascade summary below are synchronized to the selected severity.</p>
+</section>
+
+<section class="section">
+    <h2>Infrastructure Map</h2>
+    <span class="kicker">Research View</span>
+    <div class="grid" style="margin-bottom: 16px;">
+        <div class="card">
+            <div class="label">Failed Roads</div>
+            <div class="value">{{ failed_count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Critical Roads</div>
+            <div class="value">{{ critical_count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Map Layers</div>
+            <div class="value" style="font-size: 1.2rem;">Risk / Failed / Critical</div>
+        </div>
+        <div class="card">
+            <div class="label">Selected Severity</div>
+            <div class="value" style="font-size: 1.2rem;">{{ selected_severity.label }}</div>
+        </div>
+    </div>
+
+    <div id="road-map"></div>
+
+    <div class="legend">
+        <span><i class="swatch" style="background:#4f7c67;"></i>Low flood risk percentile</span>
+        <span><i class="swatch" style="background:#e0a33a;"></i>Medium flood risk percentile</span>
+        <span><i class="swatch" style="background:#c65d2e;"></i>High flood risk percentile</span>
+        <span><i class="swatch" style="background:#c53b2c;"></i>Failed roads</span>
+        <span><i class="swatch" style="background:#222222;"></i>Critical roads</span>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Selected Cascade Summary</h2>
+    <span class="kicker">Synchronized With Selected Scale</span>
+    <div class="grid">
+        <div class="card">
+            <div class="label">Scenario</div>
+            <div class="value" style="font-size: 1.2rem;">{% if selected_scenario %}{{ selected_scenario.name }}{% else %}Pune Flood Scenario{% endif %}</div>
+            <div class="subvalue">{{ severity_summary.label }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Initial Failures</div>
+            <div class="value">{{ severity_summary.initial_failures|default:"0" }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Cascade Steps</div>
+            <div class="value">{{ severity_summary.cascade_steps|default:"0" }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Peak Step Failures</div>
+            <div class="value">{{ severity_summary.peak_step_failures|default:"0" }}</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+        <div class="label">Cascade Wave</div>
+        <div class="subvalue">{{ severity_summary.capacity_cascade }}</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Training Snapshot</h2>
+    <span class="kicker">Stored Research Results</span>
+    {% if latest_training_run %}
+        <div class="grid">
+            <div class="card">
+                <div class="label">ML Dataset Rows</div>
+                <div class="value">{{ latest_training_run.metrics.ml_dataset_rows|default:"0" }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Temporal Dataset Rows</div>
+                <div class="value">{{ latest_training_run.metrics.temporal_dataset_rows|default:"0" }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Model Results</div>
+                <div class="value">{{ latest_training_run.model_results.count }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Artifacts</div>
+                <div class="value">{{ latest_training_run.artifacts.count }}</div>
+            </div>
+        </div>
+    {% else %}
+        <p>No training run found.</p>
+    {% endif %}
+</section>
+
+<section class="section">
+    <h2>Optimization Snapshot</h2>
+    <span class="kicker">Budget Comparison</span>
+    {% if optimization_rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Budget K</th>
+                    <th>Mean Failed</th>
+                    <th>Std Failed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in optimization_rows %}
+                    <tr>
+                        <td>{{ row.strategy_name }}</td>
+                        <td>{{ row.budget_k }}</td>
+                        <td>{{ row.mean_failed }}</td>
+                        <td>{{ row.std_failed }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No optimization results found.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
 <script>
+    const roadsGeoJson = {{ roads_geojson|safe }};
+    const map = L.map("road-map", { preferCanvas: true }).setView([18.5204, 73.8567], 11);
 
-/* =================
-CASCADE GRAPH
-================= */
-function updateCascadeChart(data){
+    map.createPane("allRoadsPane");
+    map.getPane("allRoadsPane").style.zIndex = 400;
+    map.createPane("criticalRoadsPane");
+    map.getPane("criticalRoadsPane").style.zIndex = 450;
+    map.createPane("failedRoadsPane");
+    map.getPane("failedRoadsPane").style.zIndex = 500;
 
-    new Chart(document.getElementById("cascadeChart"), {
-        type: 'line',
-        data: {
-            labels: data.map((_,i)=>i+1),
-            datasets: [{
-                label: "Failures",
-                data: data,
-                borderColor: "#3b82f6"
-            }]
+    L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors &copy; CARTO" }
+    ).addTo(map);
+
+    function riskColor(risk) {
+        if (risk >= 0.8) return "#c65d2e";
+        if (risk >= 0.45) return "#e0a33a";
+        return "#4f7c67";
+    }
+
+    function popupContent(feature) {
+        const props = feature.properties || {};
+        const title = props.name || props.road_name || props.resolved_road_id || "Road Segment";
+        const floodRisk = Number(props.flood_risk || 0).toFixed(3);
+        const floodRiskPct = Math.round(Number(props.flood_risk_percentile || 0) * 100);
+        const traffic = Number(props.traffic || 0).toFixed(2);
+        const criticality = Number(props.criticality || 0).toFixed(4);
+        return `
+            <div>
+                <strong>${title}</strong><br>
+                Flood risk: ${floodRisk}<br>
+                Flood risk percentile: ${floodRiskPct}%<br>
+                Traffic: ${traffic}<br>
+                Criticality: ${criticality}<br>
+                Failed in cascade: ${props.is_failed ? "Yes" : "No"}<br>
+                Critical road: ${props.is_critical ? "Yes" : "No"}
+            </div>
+        `;
+    }
+
+    if (roadsGeoJson && roadsGeoJson.features && roadsGeoJson.features.length) {
+        const allRoadsLayer = L.geoJSON(roadsGeoJson, {
+            style: feature => ({
+                pane: "allRoadsPane",
+                color: riskColor(Number(feature.properties?.flood_risk_percentile || 0)),
+                weight: 1.8,
+                opacity: 0.55
+            }),
+            onEachFeature: (feature, layer) => layer.bindPopup(popupContent(feature))
+        });
+
+        const criticalRoadsLayer = L.geoJSON(roadsGeoJson, {
+            filter: feature => feature.properties && feature.properties.is_critical,
+            style: () => ({
+                pane: "criticalRoadsPane",
+                color: "#222222",
+                weight: 2.2,
+                opacity: 0.75,
+                dashArray: "5,4"
+            }),
+            onEachFeature: (feature, layer) => layer.bindPopup(popupContent(feature))
+        });
+
+        const failedRoadsLayer = L.geoJSON(roadsGeoJson, {
+            filter: feature => feature.properties && feature.properties.is_failed,
+            style: () => ({
+                pane: "failedRoadsPane",
+                color: "#d62828",
+                weight: 3.8,
+                opacity: 1.0
+            }),
+            onEachFeature: (feature, layer) => layer.bindPopup(popupContent(feature))
+        });
+
+        allRoadsLayer.addTo(map);
+        criticalRoadsLayer.addTo(map);
+        failedRoadsLayer.addTo(map);
+
+        L.control.layers({}, {
+            "All Roads (risk colored)": allRoadsLayer,
+            "Critical Roads": criticalRoadsLayer,
+            "Failed Roads": failedRoadsLayer
+        }, { collapsed: false }).addTo(map);
+
+        const bounds = allRoadsLayer.getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [20, 20] });
         }
-    });
-
-}
-fetch("data/graphs/run_results_weather.json")
-.then(res => res.json())
-.then(data => {
-
-    let cascadeData = data["new_failures_per_step"] || [10,30,80];
-
-    // update UI
-    document.getElementById("cascadeCount").innerText = cascadeData.length;
-
-    updateCascadeChart(cascadeData);
-});
-
-new Chart(document.getElementById('cascadeChart'),{
-
-type:'line',
-
-data:{
-
-labels:cascadeData.map((_,i)=>"Step "+(i+1)),
-
-datasets:[{
-
-label:'Cascade Failures',
-
-data:cascadeData,
-
-borderColor:'#ff4d4d',
-
-backgroundColor:'rgba(255,77,77,0.15)',
-
-borderWidth:3,
-
-fill:true,
-
-tension:0.3
-
-}]
-
-}
-
-})
-
-
-
-/* =================
-REPAIR GRAPH
-================= */
-
-let repairData = {{ optimization|safe }}
-
-let budgets = repairData.map(x => x.K)
-
-let greedy = repairData.map(x => x.greedy_failed)
-
-let random = repairData.map(x => x.random_failed)
-
-new Chart(document.getElementById('repairChart'),{
-
-type:'line',
-
-data:{
-
-labels:budgets,
-
-datasets:[
-
-{
-
-label:'Greedy Optimization',
-
-data:greedy,
-
-borderColor:'#4ade80',
-
-borderWidth:3
-
-},
-
-{
-
-label:'Random Strategy',
-
-data:random,
-
-borderColor:'#f87171',
-
-borderWidth:3
-
-}
-
-]
-
-}
-
-})
-
-
-
-/* =================
-RISK SCORE
-================= */
-
-let totalFailures = cascadeData.reduce((a,b)=>a+b,0)
-
-let riskScore = Math.min(100, Math.floor(totalFailures/1000))
-
-document.getElementById("riskScore").innerText = riskScore + "%"
-
-
-
-/* =================
-STATUS LOGIC
-================= */
-
-let status="LOW"
-
-if(riskScore>70) status="CRITICAL"
-
-else if(riskScore>40) status="HIGH"
-
-else if(riskScore>20) status="MODERATE"
-
-document.getElementById("systemStatus").innerText=status
-
-
-
-/* =================
-AI INSIGHT
-================= */
-
-let insight="Cascade propagation detected. "
-
-insight+="Recommended repair strategy: Greedy Optimization. "
-
-insight+="Estimated resilience improvement after repairs."
-
-document.getElementById("aiInsight").innerText=insight
-
-
-
-/* =================
-INFRASTRUCTURE MAP
-================= */
-
-var roads = {{ roads|safe }}
-
-var map1 = L.map('map_all').setView([18.5204,73.8567],11)
-
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  {
-    maxZoom: 19
-  }
-).addTo(map1);
-
-L.geoJSON(roads,{style:{color:'gray',weight:2}}).addTo(map1)
-
-
-
-/* =================
-CASCADE MAP
-================= */
-
-var map2 = L.map('map_failures').setView([18.5204,73.8567],11)
-
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  {
-    maxZoom: 19
-  }
-).addTo(map2)
-
-var roadLayers=[]
-
-L.geoJSON(roads,{
-
-style:{color:'green',weight:2},
-
-onEachFeature:function(feature,layer){
-
-roadLayers.push(layer)
-
-}
-
-}).addTo(map2)
-
-let slider=document.getElementById("stepSlider")
-
-let stepValue=document.getElementById("stepValue")
-
-let failedRoads=new Set()
-
-slider.oninput=function(){
-
-let step=parseInt(this.value)
-
-stepValue.innerHTML=step
-
-roadLayers.forEach(function(layer,index){
-
-if(failedRoads.has(index)){
-
-layer.setStyle({color:'red',weight:3})
-
-return
-
-}
-
-if(Math.random() < (step/slider.max)){
-
-failedRoads.add(index)
-
-layer.setStyle({color:'red',weight:3})
-
-}
-
-})
-
-}
-
-
-
-/* =================
-REPAIR MAP
-================= */
-
-var map3=L.map('map_repair').setView([18.5204,73.8567],11)
-
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  {
-    maxZoom: 19
-  }
-).addTo(map3)
-
-var repairLayers=[]
-
-L.geoJSON(roads,{
-
-style:{color:'green',weight:2},
-
-onEachFeature:function(feature,layer){
-
-repairLayers.push(layer)
-
-}
-
-}).addTo(map3)
-
-function applyRepairs(){
-
-repairLayers.forEach(function(layer){
-
-if(Math.random()<0.05){
-
-layer.setStyle({color:'blue',weight:4})
-
-}
-
-})
-
-}
-
-
-
-/* =================
-BEFORE AFTER MAPS
-================= */
-
-var mapBefore=L.map('map_before').setView([18.5204,73.8567],11)
-
-var mapAfter=L.map('map_after').setView([18.5204,73.8567],11)
-
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  {
-    maxZoom: 19
-  }
-).addTo(mapBefore)
-
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  {
-    maxZoom: 19
-  }
-).addTo(mapAfter)
-
-var beforeLayers=[]
-
-var afterLayers=[]
-
-L.geoJSON(roads,{
-
-style:{color:'green',weight:2},
-
-onEachFeature:function(feature,layer){
-
-beforeLayers.push(layer)
-
-}
-
-}).addTo(mapBefore)
-
-L.geoJSON(roads,{
-
-style:{color:'green',weight:2},
-
-onEachFeature:function(feature,layer){
-
-afterLayers.push(layer)
-
-}
-
-}).addTo(mapAfter)
-
-beforeLayers.forEach(function(layer){
-
-if(Math.random()<0.25){
-
-layer.setStyle({color:'red',weight:3})
-
-}
-
-})
-
-afterLayers.forEach(function(layer){
-
-if(Math.random()<0.25){
-
-layer.setStyle({color:'red',weight:3})
-
-if(Math.random()<0.4){
-
-layer.setStyle({color:'blue',weight:4})
-
-}
-
-}
-
-})
-
+    }
 </script>
-
-</body>
-</html>
+{% endblock %}

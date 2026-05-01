@@ -1,0 +1,625 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Safe Rerouting{% endblock %}
+{% block hero_title %}Safe Rerouting Planner{% endblock %}
+{% block hero_subtitle %}Explore alternative routes after flood-driven failures using safety-aware, balanced, or emergency routing costs on the infrastructure graph.{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<style>
+    #route-map {
+        height: 560px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        margin-top: 14px;
+    }
+
+    .route-form {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+        align-items: end;
+    }
+
+    .route-form label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.92rem;
+    }
+
+    .route-form input,
+    .route-form select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        box-sizing: border-box;
+    }
+
+    .route-form button,
+    .quick-pick {
+        padding: 12px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .search-shell {
+        position: relative;
+    }
+
+    .search-results {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 20;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 14px 24px rgba(70, 47, 24, 0.10);
+        display: none;
+        max-height: 220px;
+        overflow-y: auto;
+    }
+
+    .search-item {
+        padding: 10px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f2e7d6;
+    }
+
+    .search-item:last-child {
+        border-bottom: 0;
+    }
+
+    .search-item:hover {
+        background: #fff6e8;
+    }
+
+    .selection-grid,
+    .route-steps {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    .selection-card {
+        min-height: 110px;
+    }
+
+    .selection-state,
+    .helper-note {
+        margin-top: 10px;
+        color: var(--muted);
+    }
+
+    .selection-state {
+        color: var(--accent-dark);
+        font-weight: bold;
+    }
+
+    .quick-picks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .quick-pick {
+        padding: 8px 12px;
+    }
+
+    .route-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 14px;
+        font-size: 0.95rem;
+        color: var(--muted);
+    }
+
+    .route-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .route-legend i {
+        width: 18px;
+        height: 4px;
+        display: inline-block;
+        border-radius: 999px;
+    }
+
+    .step-list {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        max-height: 260px;
+        overflow-y: auto;
+    }
+
+    .step-list li {
+        margin-bottom: 8px;
+    }
+
+    @media (max-width: 900px) {
+        .route-form,
+        .selection-grid,
+        .route-steps {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .route-form,
+        .selection-grid,
+        .route-steps {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>Rerouting Controls</h2>
+    <span class="kicker">Separate Add-On Module</span>
+    <form method="get" action="/routing/" class="route-form">
+        {% if selected_scenario %}
+            <input type="hidden" name="scenario" value="{{ selected_scenario.slug }}">
+        {% endif %}
+        {% if custom_scale %}
+            <input type="hidden" name="custom_scale" value="{{ custom_scale }}">
+        {% else %}
+            <input type="hidden" name="severity" value="{{ selected_severity.slug }}">
+        {% endif %}
+        <input type="hidden" id="source" name="source" value="{{ route_source }}">
+        <input type="hidden" id="target" name="target" value="{{ route_target }}">
+
+        <div>
+            <label for="source_display">Source road</label>
+            <div class="search-shell">
+                <input id="source_display" value="{{ route_source_label }}" placeholder="Search by road id or name">
+                <div id="source_results" class="search-results"></div>
+            </div>
+        </div>
+
+        <div>
+            <label for="target_display">Target road</label>
+            <div class="search-shell">
+                <input id="target_display" value="{{ route_target_label }}" placeholder="Search by road id or name">
+                <div id="target_results" class="search-results"></div>
+            </div>
+        </div>
+
+        <div>
+            <label for="mode">Routing mode</label>
+            <select id="mode" name="mode">
+                {% for value, label in route_mode_options %}
+                    <option value="{{ value }}" {% if route_mode == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <button type="submit">Find reroute</button>
+        </div>
+    </form>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="label">Quick road picks</div>
+        <div class="subvalue">Use these to fill source and target quickly if you do not want to search manually.</div>
+        <div class="quick-picks">
+            {% for road in route_examples %}
+                <button class="quick-pick" type="button" data-road-id="{{ road.id }}" data-road-label="{{ road.label }}">
+                    {{ road.label }}
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="selection-grid">
+        <div class="card selection-card">
+            <div class="label">Current source selection</div>
+            <div class="value" id="source_label_preview" style="font-size: 1.05rem;">
+                {% if route_source_label %}{{ route_source_label }}{% else %}No source selected yet{% endif %}
+            </div>
+            <div class="helper-note">First map click or first search selection fills the source.</div>
+        </div>
+        <div class="card selection-card">
+            <div class="label">Current target selection</div>
+            <div class="value" id="target_label_preview" style="font-size: 1.05rem;">
+                {% if route_target_label %}{{ route_target_label }}{% else %}No target selected yet{% endif %}
+            </div>
+            <div class="helper-note">Second map click or second search selection fills the target.</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="label">Mode explanation</div>
+        <div class="subvalue">
+            <strong>{{ route_mode|title }}</strong>:
+            {% if route_mode == 'safe' %}{{ route_mode_descriptions.safe }}{% endif %}
+            {% if route_mode == 'balanced' %}{{ route_mode_descriptions.balanced }}{% endif %}
+            {% if route_mode == 'fast' %}{{ route_mode_descriptions.fast }}{% endif %}
+            {% if route_mode == 'emergency' %}{{ route_mode_descriptions.emergency }}{% endif %}
+        </div>
+        <div class="subvalue" style="margin-top: 10px;">
+            Tip: click any road segment on the map to set the source and target inputs.
+        </div>
+        <div class="selection-state" id="selection_state">
+            Choose a source road first, then choose a target road, then click <strong>Find reroute</strong>.
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Route Summary</h2>
+    {% if route_result and not route_result.error %}
+        <div class="grid">
+            <div class="card">
+                <div class="label">Source</div>
+                <div class="value" style="font-size: 1.05rem;">{{ route_source_label }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Target</div>
+                <div class="value" style="font-size: 1.05rem;">{{ route_target_label }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Mode</div>
+                <div class="value" style="font-size: 1.15rem;">{{ route_result.mode|title }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Segments</div>
+                <div class="value">{{ route_result.metrics.segment_count }}</div>
+            </div>
+        </div>
+
+        <div class="grid" style="margin-top: 16px;">
+            <div class="card">
+                <div class="label">Total Length</div>
+                <div class="value">{{ route_result.metrics.total_length }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average Traffic</div>
+                <div class="value">{{ route_result.metrics.avg_traffic }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average Flood Risk</div>
+                <div class="value">{{ route_result.metrics.avg_flood_risk }}</div>
+            </div>
+        </div>
+
+        {% if baseline_route_result and not baseline_route_result.error %}
+            <div class="grid" style="margin-top: 16px;">
+                <div class="card">
+                    <div class="label">Baseline Segments</div>
+                    <div class="value">{{ baseline_route_result.metrics.segment_count }}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Baseline Length</div>
+                    <div class="value">{{ baseline_route_result.metrics.total_length }}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Reroute Length Delta</div>
+                    <div class="value">{{ route_comparison.length_delta }}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Baseline Avg Flood Risk</div>
+                    <div class="value">{{ baseline_route_result.metrics.avg_flood_risk }}</div>
+                </div>
+            </div>
+            <div class="grid" style="margin-top: 16px;">
+                <div class="card">
+                    <div class="label">Segment Delta</div>
+                    <div class="value">{{ route_comparison.segment_delta }}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Flood Risk Delta</div>
+                    <div class="value">{{ route_comparison.risk_delta }}</div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="card" style="margin-top: 16px;">
+            <div class="label">Reroute output</div>
+            <div class="subvalue">The list below is the actual segment-by-segment path currently suggested by the resilience graph.</div>
+        </div>
+
+        <div class="route-steps">
+            <div class="card">
+                <div class="label">Suggested reroute segments</div>
+                <ol class="step-list">
+                    {% for segment in route_segments %}
+                        <li><strong>{{ segment.label }}</strong><br><span class="subvalue">{{ segment.id }}</span></li>
+                    {% endfor %}
+                </ol>
+            </div>
+            <div class="card">
+                <div class="label">Baseline route segments</div>
+                <ol class="step-list">
+                    {% for segment in baseline_route_segments %}
+                        <li><strong>{{ segment.label }}</strong><br><span class="subvalue">{{ segment.id }}</span></li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+    {% elif route_result and route_result.error %}
+        <div class="card">
+            <div class="label">Routing status</div>
+            <div class="subvalue">{{ route_result.error }}</div>
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="subvalue">Select a source and target road, then click <strong>Find reroute</strong> to generate a route output.</div>
+        </div>
+    {% endif %}
+</section>
+
+<section class="section">
+    <h2>Route Map</h2>
+    <span class="kicker">Separate Visualization</span>
+    <div id="route-map"></div>
+    <div class="route-legend">
+        <span><i style="background:#64748b; border-top:2px dashed #64748b;"></i>Baseline route</span>
+        <span><i style="background:#1d4ed8;"></i>Rerouted path</span>
+        <span><i style="background:#16a34a; width:12px; height:12px; border-radius:999px;"></i>Source</span>
+        <span><i style="background:#dc2626; width:12px; height:12px; border-radius:999px;"></i>Target</span>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const roadsGeoJson = {{ roads_geojson|safe }};
+    const routeGeoJson = {{ route_geojson|safe }};
+    const baselineRouteGeoJson = {{ baseline_route_geojson|safe }};
+
+    const map = L.map("route-map", { preferCanvas: true }).setView([18.5204, 73.8567], 11);
+    const sourceInput = document.getElementById("source");
+    const targetInput = document.getElementById("target");
+    const sourceDisplay = document.getElementById("source_display");
+    const targetDisplay = document.getElementById("target_display");
+    const sourceResults = document.getElementById("source_results");
+    const targetResults = document.getElementById("target_results");
+    const sourcePreview = document.getElementById("source_label_preview");
+    const targetPreview = document.getElementById("target_label_preview");
+    const selectionState = document.getElementById("selection_state");
+    const quickPicks = Array.from(document.querySelectorAll(".quick-pick"));
+
+    let nextSelection = sourceInput.value ? (targetInput.value ? "source" : "target") : "source";
+    let sourceMarker = null;
+    let targetMarker = null;
+
+    function updateSelectionState() {
+        if (!sourceInput.value) {
+            selectionState.innerHTML = 'Choose a source road first, then choose a target road, then click <strong>Find reroute</strong>.';
+            return;
+        }
+        if (!targetInput.value) {
+            selectionState.innerHTML = 'Source selected. Choose a target road next, then click <strong>Find reroute</strong>.';
+            return;
+        }
+        selectionState.innerHTML = 'Source and target are selected. Click <strong>Find reroute</strong> to generate the output path.';
+    }
+
+    function featureCenter(feature) {
+        const geometry = feature?.geometry || {};
+        const coords = geometry.coordinates || [];
+        let flat = [];
+        if (geometry.type === "LineString") {
+            flat = coords;
+        } else if (geometry.type === "MultiLineString") {
+            coords.forEach(segment => flat.push(...segment));
+        }
+        if (!flat.length) return null;
+        const lat = flat.reduce((sum, point) => sum + point[1], 0) / flat.length;
+        const lon = flat.reduce((sum, point) => sum + point[0], 0) / flat.length;
+        return [lat, lon];
+    }
+
+    function setMarker(kind, feature) {
+        const point = featureCenter(feature);
+        if (!point) return;
+
+        const markerConfig = kind === "source"
+            ? { color: "#16a34a", label: "Source" }
+            : { color: "#dc2626", label: "Target" };
+
+        if (kind === "source" && sourceMarker) {
+            map.removeLayer(sourceMarker);
+        }
+        if (kind === "target" && targetMarker) {
+            map.removeLayer(targetMarker);
+        }
+
+        const marker = L.circleMarker(point, {
+            radius: 8,
+            color: markerConfig.color,
+            fillColor: markerConfig.color,
+            fillOpacity: 1
+        }).addTo(map).bindPopup(markerConfig.label);
+
+        if (kind === "source") {
+            sourceMarker = marker;
+        } else {
+            targetMarker = marker;
+        }
+    }
+
+    function applySelection(kind, roadId, label, feature = null) {
+        if (kind === "source") {
+            sourceInput.value = roadId;
+            sourceDisplay.value = label;
+            sourcePreview.textContent = label;
+            nextSelection = "target";
+        } else {
+            targetInput.value = roadId;
+            targetDisplay.value = label;
+            targetPreview.textContent = label;
+            nextSelection = "source";
+        }
+
+        if (feature) {
+            setMarker(kind, feature);
+        }
+        updateSelectionState();
+    }
+
+    function attachSearch(displayInput, hiddenInput, resultBox) {
+        async function loadResults(query) {
+            if (!query || query.trim().length < 2) {
+                resultBox.style.display = "none";
+                resultBox.innerHTML = "";
+                return;
+            }
+
+            const response = await fetch(`/routing/search/?q=${encodeURIComponent(query)}`);
+            const payload = await response.json();
+            const results = payload.results || [];
+
+            resultBox.innerHTML = "";
+            if (!results.length) {
+                resultBox.style.display = "none";
+                return;
+            }
+
+            results.forEach(item => {
+                const div = document.createElement("div");
+                div.className = "search-item";
+                div.textContent = item.label;
+                div.addEventListener("click", () => {
+                    const kind = hiddenInput.id === "source" ? "source" : "target";
+                    applySelection(kind, item.id, item.label);
+                    resultBox.style.display = "none";
+                    resultBox.innerHTML = "";
+                });
+                resultBox.appendChild(div);
+            });
+            resultBox.style.display = "block";
+        }
+
+        displayInput.addEventListener("input", () => {
+            hiddenInput.value = "";
+            if (hiddenInput.id === "source") {
+                sourcePreview.textContent = "No source selected yet";
+            } else {
+                targetPreview.textContent = "No target selected yet";
+            }
+            loadResults(displayInput.value);
+            updateSelectionState();
+        });
+
+        displayInput.addEventListener("blur", () => {
+            setTimeout(() => {
+                resultBox.style.display = "none";
+            }, 150);
+        });
+    }
+
+    attachSearch(sourceDisplay, sourceInput, sourceResults);
+    attachSearch(targetDisplay, targetInput, targetResults);
+
+    quickPicks.forEach(button => {
+        button.addEventListener("click", () => {
+            const roadId = button.dataset.roadId;
+            const label = button.dataset.roadLabel;
+            const kind = !sourceInput.value || nextSelection === "source" ? "source" : "target";
+            applySelection(kind, roadId, label);
+        });
+    });
+
+    L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors &copy; CARTO" }
+    ).addTo(map);
+
+    function riskColor(risk) {
+        if (risk >= 0.8) return "#c65d2e";
+        if (risk >= 0.45) return "#e0a33a";
+        return "#4f7c67";
+    }
+
+    let baseBounds = null;
+
+    if (roadsGeoJson && roadsGeoJson.features && roadsGeoJson.features.length) {
+        const baseLayer = L.geoJSON(roadsGeoJson, {
+            style: feature => ({
+                color: riskColor(Number(feature.properties?.flood_risk_percentile || 0)),
+                weight: 1.4,
+                opacity: 0.45
+            }),
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties || {};
+                const roadId = props.road_id || props.resolved_road_id || "";
+                const roadName = props.name || props.road_name || "";
+                const label = roadName ? `${roadName} (${roadId})` : roadId;
+                layer.bindPopup(label || "Road segment");
+                layer.on("click", function() {
+                    if (!roadId) return;
+                    const kind = !sourceInput.value || nextSelection === "source" ? "source" : "target";
+                    applySelection(kind, roadId, label, feature);
+                });
+            }
+        }).addTo(map);
+        baseBounds = baseLayer.getBounds();
+    }
+
+    if (baselineRouteGeoJson && baselineRouteGeoJson.features && baselineRouteGeoJson.features.length) {
+        L.geoJSON(baselineRouteGeoJson, {
+            style: {
+                color: "#64748b",
+                weight: 4,
+                opacity: 0.75,
+                dashArray: "8,6"
+            }
+        }).addTo(map);
+    }
+
+    if (routeGeoJson && routeGeoJson.features && routeGeoJson.features.length) {
+        const routeLayer = L.geoJSON(routeGeoJson, {
+            style: {
+                color: "#1d4ed8",
+                weight: 5,
+                opacity: 0.95
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties || {};
+                layer.bindPopup(props.road_id || props.resolved_road_id || "Route segment");
+            }
+        }).addTo(map);
+
+        const routeBounds = routeLayer.getBounds();
+        if (routeBounds.isValid()) {
+            map.fitBounds(routeBounds, { padding: [20, 20] });
+        } else if (baseBounds && baseBounds.isValid()) {
+            map.fitBounds(baseBounds, { padding: [20, 20] });
+        }
+
+        const routeFeatures = routeGeoJson.features || [];
+        const firstFeature = routeFeatures[0];
+        const lastFeature = routeFeatures[routeFeatures.length - 1];
+
+        if (firstFeature) {
+            setMarker("source", firstFeature);
+        }
+        if (lastFeature) {
+            setMarker("target", lastFeature);
+        }
+    } else if (baseBounds && baseBounds.isValid()) {
+        map.fitBounds(baseBounds, { padding: [20, 20] });
+    }
+
+    updateSelectionState();
+</script>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Scenario Explorer{% endblock %}
+{% block hero_title %}Scenario Explorer{% endblock %}
+{% block hero_subtitle %}Compare flood severities and inspect how the selected scenario changes network-scale failure behavior.{% endblock %}
+
+{% block content %}
+<section class="section">
+    <h2>Severity Comparison</h2>
+    <div class="scenario-list">
+        {% for option in severity_options %}
+            <a class="scenario-chip {% if option.slug == selected_severity.slug %}active{% endif %}"
+               href="/scenarios/?scenario={% if selected_scenario %}{{ selected_scenario.slug }}{% endif %}&severity={{ option.slug }}">
+                {{ option.label }}
+            </a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="section">
+    <h2>Scale Comparison Chart</h2>
+    <div class="card">
+        <canvas id="severityComparisonChart" height="110"></canvas>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Selected Severity Metrics</h2>
+    <div class="grid">
+        <div class="card">
+            <div class="label">Selected Scenario</div>
+            <div class="value" style="font-size: 1.2rem;">{% if selected_scenario %}{{ selected_scenario.name }}{% else %}Pune Flood Scenario{% endif %}</div>
+        </div>
+        <div class="card">
+            <div class="label">Severity</div>
+            <div class="value">{{ selected_severity.slug }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Failed Roads</div>
+            <div class="value">{{ failed_count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Critical Roads</div>
+            <div class="value">{{ critical_count }}</div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Cascade Interpretation</h2>
+    <div class="grid-3">
+        <div class="card">
+            <div class="label">Initial Failures</div>
+            <div class="value">{{ severity_summary.initial_failures }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Cascade Steps</div>
+            <div class="value">{{ severity_summary.cascade_steps }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Peak Step Failures</div>
+            <div class="value">{{ severity_summary.peak_step_failures }}</div>
+        </div>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+        <div class="label">Cascade Wave</div>
+        <div class="subvalue">{{ severity_summary.capacity_cascade }}</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Research Notes</h2>
+    <div class="card">
+        <p class="subvalue">
+            The scenario explorer keeps the map and failure metrics synchronized to the same severity. This is important for research reporting because the spatial view and aggregate metrics now reflect the same saved experiment artifact.
+        </p>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Critical-Road Spatial Summary</h2>
+    {% if critical_summary %}
+        <div class="grid">
+            <div class="card">
+                <div class="label">Critical Roads Tracked</div>
+                <div class="value">{{ critical_summary.critical_count }}</div>
+            </div>
+            <div class="card">
+                <div class="label">East-of-City Midline Share</div>
+                <div class="value">{{ critical_summary.critical_east_share }}</div>
+            </div>
+            <div class="card">
+                <div class="label">West-of-City Midline Share</div>
+                <div class="value">{{ critical_summary.critical_west_share }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Critical Centroid</div>
+                <div class="value" style="font-size: 1.05rem;">{{ critical_summary.critical_centroid_lat }}, {{ critical_summary.critical_centroid_lon }}</div>
+            </div>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+            <p class="subvalue">
+                This explains why the black critical-road overlay is denser on one side of the map: the current centrality-plus-traffic ranking is spatially concentrated rather than uniform across Pune.
+            </p>
+        </div>
+    {% else %}
+        <p>No critical-road summary is available.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const severityOverview = {{ severity_overview|safe }};
+    const severityLabels = severityOverview.map(item => item.label);
+    const failedRoadCounts = severityOverview.map(item => item.failed_count);
+    const peakStepFailures = severityOverview.map(item => item.peak_step_failures);
+
+    new Chart(document.getElementById("severityComparisonChart"), {
+        type: "bar",
+        data: {
+            labels: severityLabels,
+            datasets: [
+                {
+                    label: "Failed roads",
+                    data: failedRoadCounts,
+                    backgroundColor: "#c65d2e"
+                },
+                {
+                    label: "Peak step failures",
+                    data: peakStepFailures,
+                    backgroundColor: "#4f7c67"
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "top"
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
