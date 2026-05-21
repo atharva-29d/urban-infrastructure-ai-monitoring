@@ -25,12 +25,35 @@
             <div class="value" style="font-size: 1.2rem;">{{ selected_severity.label }}</div>
         </div>
     </div>
+    {% if best_budget_summary %}
+        <div class="grid" style="margin-top: 16px;">
+            <div class="card">
+                <div class="label">Best Budget K</div>
+                <div class="value">{{ best_budget_summary.budget_k }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Failed Roads Reduced vs Random</div>
+                <div class="value">{{ best_budget_summary.failed_reduction }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Resilience Gain vs Random</div>
+                <div class="value">{{ best_budget_summary.resilience_gain }}</div>
+            </div>
+        </div>
+    {% endif %}
 </section>
 
 <section class="section">
     <h2>Budget Sensitivity Chart</h2>
     <div class="card">
         <canvas id="optimizationChart" height="110"></canvas>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Resilience Comparison Chart</h2>
+    <div class="card">
+        <canvas id="resilienceChart" height="110"></canvas>
     </div>
 </section>
 
@@ -82,6 +105,8 @@
     const optimizationLabels = {{ optimization_chart_labels|safe }};
     const greedyValues = {{ optimization_greedy_values|safe }};
     const randomValues = {{ optimization_random_values|safe }};
+    const greedyResilienceValues = {{ optimization_greedy_resilience_values|safe }};
+    const randomResilienceValues = {{ optimization_random_resilience_values|safe }};
 
     new Chart(document.getElementById("optimizationChart"), {
         type: "line",
@@ -100,6 +125,37 @@
                     data: randomValues,
                     borderColor: "#4f7c67",
                     backgroundColor: "#4f7c67",
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "top"
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("resilienceChart"), {
+        type: "line",
+        data: {
+            labels: optimizationLabels,
+            datasets: [
+                {
+                    label: "Greedy Repair Resilience",
+                    data: greedyResilienceValues,
+                    borderColor: "#8f3f1b",
+                    backgroundColor: "#8f3f1b",
+                    tension: 0.2
+                },
+                {
+                    label: "Random Repair Resilience",
+                    data: randomResilienceValues,
+                    borderColor: "#2f6b4f",
+                    backgroundColor: "#2f6b4f",
                     tension: 0.2
                 }
             ]

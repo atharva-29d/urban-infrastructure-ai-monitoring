@@ -4,9 +4,13 @@ import pickle
 import random
 from functools import lru_cache
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode
+from urllib.request import Request, urlopen
 
 import networkx as nx
 import pandas as pd
+from django.conf import settings
 from django.db.models import Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -28,6 +32,18 @@ def repo_root():
 
 def dashboard_artifact_dir():
     return repo_root() / "data" / "dashboard_artifacts"
+
+
+def mapbox_public_token():
+    return getattr(settings, "MAPBOX_PUBLIC_TOKEN", "")
+
+
+def mapbox_secret_token():
+    return getattr(settings, "MAPBOX_SECRET_TOKEN", "")
+
+
+def mapbox_enabled():
+    return bool(mapbox_public_token() and mapbox_secret_token())
 
 
 @lru_cache(maxsize=64)
@@ -298,6 +314,85 @@ def feature_center(feature):
     return lon, lat
 
 
+def mapbox_request_json(url):
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "EDI-Research-Dashboard/1.0",
+        },
+    )
+    try:
+        with urlopen(request, timeout=12) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def mapbox_place_suggestions(query, limit=5):
+    if not mapbox_enabled():
+        return []
+
+    encoded_query = quote(query.strip())
+    params = urlencode(
+        {
+            "access_token": mapbox_secret_token(),
+            "autocomplete": "true",
+            "limit": limit,
+            "country": "IN",
+            "language": "en",
+        }
+    )
+    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json?{params}"
+    payload = mapbox_request_json(url)
+    if not payload:
+        return []
+
+    suggestions = []
+    for feature in payload.get("features", []):
+        center = feature.get("center") or []
+        if len(center) != 2:
+            continue
+        suggestions.append(
+            {
+                "kind": "place",
+                "label": feature.get("place_name") or feature.get("text") or "Mapbox place",
+                "lng": center[0],
+                "lat": center[1],
+                "road_id": "",
+            }
+        )
+    return suggestions
+
+
+def mapbox_profile_name(travel_profile):
+    return {
+        "driving": "mapbox/driving-traffic",
+        "walking": "mapbox/walking",
+        "cycling": "mapbox/cycling",
+    }.get(travel_profile, "mapbox/driving-traffic")
+
+
+def mapbox_directions(origin, destination, travel_profile="driving"):
+    if not mapbox_enabled():
+        return None
+
+    coordinates = f"{origin[0]},{origin[1]};{destination[0]},{destination[1]}"
+    params = urlencode(
+        {
+            "access_token": mapbox_secret_token(),
+            "alternatives": "true",
+            "steps": "true",
+            "overview": "full",
+            "geometries": "geojson",
+            "language": "en",
+            "annotations": "distance,duration,speed",
+        }
+    )
+    profile = mapbox_profile_name(travel_profile)
+    url = f"https://api.mapbox.com/directions/v5/{profile}/{coordinates}?{params}"
+    return mapbox_request_json(url)
+
+
 @lru_cache(maxsize=1)
 def roads_feature_lookup():
     roads_geojson = load_roads_geojson()
@@ -320,6 +415,7 @@ def route_catalog():
         props = feature.get("properties", {})
         name = props.get("name") or props.get("road_name") or ""
         highway = props.get("highway") or ""
+        center = feature_center(feature)
         if name:
             label = f"{name} ({road_id})"
         elif highway:
@@ -332,6 +428,7 @@ def route_catalog():
                 "label": label,
                 "name": name.lower(),
                 "highway": str(highway).lower(),
+                "center": center,
             }
         )
     return rows
@@ -344,6 +441,22 @@ def road_display_label(road_id):
         if item["id"] == road_id:
             return item["label"]
     return road_id
+
+
+def nearest_road_id(lng, lat):
+    best_id = ""
+    best_distance = float("inf")
+    for item in route_catalog():
+        center = item.get("center")
+        if not center:
+            continue
+        dx = center[0] - lng
+        dy = center[1] - lat
+        distance = (dx * dx) + (dy * dy)
+        if distance < best_distance:
+            best_distance = distance
+            best_id = item["id"]
+    return best_id
 
 
 def build_graph_attribute_maps(graph):
@@ -509,6 +622,7 @@ def route_examples(limit=6):
         {
             "id": road_id,
             "label": road_display_label(road_id),
+            "center": next((item.get("center") for item in route_catalog() if item["id"] == road_id), None),
         }
         for road_id, _ in ranked[:limit]
     ]
@@ -524,9 +638,27 @@ def search_route_options(query, limit=8):
     for item in route_catalog():
         haystacks = [item["id"].lower(), item["label"].lower(), item["name"], item["highway"]]
         if any(h.startswith(query) for h in haystacks if h):
-            starts.append({"id": item["id"], "label": item["label"]})
+            starts.append(
+                {
+                    "kind": "road",
+                    "id": item["id"],
+                    "label": item["label"],
+                    "lng": item["center"][0] if item.get("center") else None,
+                    "lat": item["center"][1] if item.get("center") else None,
+                    "road_id": item["id"],
+                }
+            )
         elif any(query in h for h in haystacks if h):
-            contains.append({"id": item["id"], "label": item["label"]})
+            contains.append(
+                {
+                    "kind": "road",
+                    "id": item["id"],
+                    "label": item["label"],
+                    "lng": item["center"][0] if item.get("center") else None,
+                    "lat": item["center"][1] if item.get("center") else None,
+                    "road_id": item["id"],
+                }
+            )
 
         if len(starts) >= limit:
             break
@@ -534,7 +666,10 @@ def search_route_options(query, limit=8):
     results = starts[:limit]
     if len(results) < limit:
         results.extend(contains[: limit - len(results)])
-    return results
+    remaining = max(limit - len(results), 0)
+    if remaining:
+        results.extend(mapbox_place_suggestions(query, limit=remaining))
+    return results[:limit]
 
 
 def routing_weight(graph, mode):
@@ -582,6 +717,129 @@ def route_metrics(graph, route_ids):
         "total_length": round(total_length, 2),
         "avg_traffic": round(total_traffic / max(len(route_ids), 1), 2),
         "avg_flood_risk": round(total_risk / max(len(route_ids), 1), 4),
+    }
+
+
+def route_safety_score(metrics, blocked_overlap=0):
+    if not metrics:
+        return 0
+
+    risk_penalty = min(metrics.get("avg_flood_risk", 0.0) * 55.0, 55.0)
+    traffic_penalty = min((metrics.get("avg_traffic", 0.0) / 220.0) * 20.0, 20.0)
+    segment_penalty = min((metrics.get("segment_count", 0) / 28.0) * 10.0, 10.0)
+    blocked_penalty = min(blocked_overlap * 7.0, 15.0)
+    score = max(0.0, 100.0 - risk_penalty - traffic_penalty - segment_penalty - blocked_penalty)
+    return round(score, 1)
+
+
+def build_route_recommendation(mapbox_primary_route, route_result, route_comparison, blocked_overlap):
+    if route_result and not route_result.get("error"):
+        safe_score = route_safety_score(route_result.get("metrics", {}), blocked_overlap=0)
+    else:
+        safe_score = 0.0
+
+    baseline_metrics = None
+    if route_result and route_comparison is not None:
+        baseline_metrics = {
+            "segment_count": route_result["metrics"]["segment_count"] - route_comparison["segment_delta"],
+            "avg_flood_risk": route_result["metrics"]["avg_flood_risk"] - route_comparison["risk_delta"],
+            "avg_traffic": route_result["metrics"]["avg_traffic"],
+        }
+    baseline_score = route_safety_score(baseline_metrics or {}, blocked_overlap=blocked_overlap) if baseline_metrics else 0.0
+
+    if blocked_overlap > 0:
+        return {
+            "label": "Recommended: Resilience Route",
+            "reason": f"The normal local route overlaps {blocked_overlap} failed or unsafe segments, so the safer reroute is the better choice.",
+            "live_score": baseline_score,
+            "safe_score": safe_score,
+        }
+
+    if route_comparison and route_comparison["risk_delta"] < 0:
+        return {
+            "label": "Recommended: Resilience Route",
+            "reason": f"The resilience route lowers average flood exposure by {abs(route_comparison['risk_delta'])} while keeping the trip navigable.",
+            "live_score": baseline_score,
+            "safe_score": safe_score,
+        }
+
+    if mapbox_primary_route:
+        return {
+            "label": "Recommended: Fastest Live Route",
+            "reason": "Under the current scenario, the direct live route is still acceptable and has no strong safety disadvantage.",
+            "live_score": baseline_score,
+            "safe_score": safe_score,
+        }
+
+    return {
+        "label": "Recommended: Resilience Route",
+        "reason": "Only the resilience-aware route has enough infrastructure context to give a robust recommendation here.",
+        "live_score": baseline_score,
+        "safe_score": safe_score,
+    }
+
+
+def scenario_route_snapshots(source_id, target_id, mode):
+    snapshots = []
+    if not source_id or not target_id:
+        return snapshots
+
+    for severity in available_severities():
+        failed_ids = load_failed_road_ids(severity["graph_path"])
+        result = safest_route_result(source_id, target_id, failed_ids, mode=mode)
+        if result and not result.get("error"):
+            metrics = result["metrics"]
+            snapshots.append(
+                {
+                    "severity_label": severity["label"],
+                    "severity_slug": severity["slug"],
+                    "route_available": True,
+                    "segment_count": metrics["segment_count"],
+                    "avg_flood_risk": metrics["avg_flood_risk"],
+                    "safety_score": route_safety_score(metrics, blocked_overlap=0),
+                }
+            )
+        else:
+            snapshots.append(
+                {
+                    "severity_label": severity["label"],
+                    "severity_slug": severity["slug"],
+                    "route_available": False,
+                    "segment_count": None,
+                    "avg_flood_risk": None,
+                    "safety_score": 0.0,
+                    "error": result.get("error") if result else "Route unavailable",
+                }
+            )
+    return snapshots
+
+
+def summarize_mapbox_route(route, index):
+    geometry = route.get("geometry") or {}
+    legs = route.get("legs") or []
+    steps = []
+    if legs:
+        for step in legs[0].get("steps", [])[:14]:
+            instruction = (
+                step.get("maneuver", {}).get("instruction")
+                or step.get("name")
+                or "Continue"
+            )
+            steps.append(
+                {
+                    "instruction": instruction,
+                    "distance_m": round(safe_float(step.get("distance")), 1),
+                    "duration_s": round(safe_float(step.get("duration")), 1),
+                }
+            )
+
+    return {
+        "rank": index,
+        "label": "Fastest Live Route" if index == 0 else f"Alternative Route {index}",
+        "distance_km": round(safe_float(route.get("distance")) / 1000, 2),
+        "duration_min": round(safe_float(route.get("duration")) / 60, 1),
+        "geometry": {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": geometry, "properties": {"label": f"route_{index}"}}]},
+        "steps": steps,
     }
 
 
@@ -914,26 +1172,53 @@ def optimization_analysis(request):
     chart_labels = []
     greedy_values = []
     random_values = []
+    greedy_resilience_values = []
+    random_resilience_values = []
+    best_budget_summary = None
 
     if optimization_groups:
         first_group_rows = optimization_groups[0]["rows"]
         grouped_by_budget = {}
         for row in first_group_rows:
             grouped_by_budget.setdefault(row.budget_k, {})[row.strategy_name] = row.mean_failed
+            grouped_by_budget[row.budget_k][f"{row.strategy_name}_resilience"] = row.resilience_score
 
         for budget in sorted(grouped_by_budget):
             chart_labels.append(str(budget))
             greedy_values.append(grouped_by_budget[budget].get("Greedy Repair", 0))
             random_values.append(grouped_by_budget[budget].get("Random Repair", 0))
+            greedy_resilience_values.append(grouped_by_budget[budget].get("Greedy Repair_resilience", 0))
+            random_resilience_values.append(grouped_by_budget[budget].get("Random Repair_resilience", 0))
+
+        reductions = []
+        for budget in sorted(grouped_by_budget):
+            greedy = grouped_by_budget[budget].get("Greedy Repair", 0)
+            random_value = grouped_by_budget[budget].get("Random Repair", 0)
+            reductions.append(
+                {
+                    "budget_k": budget,
+                    "failed_reduction": round(random_value - greedy, 2),
+                    "resilience_gain": round(
+                        (grouped_by_budget[budget].get("Greedy Repair_resilience") or 0)
+                        - (grouped_by_budget[budget].get("Random Repair_resilience") or 0),
+                        4,
+                    ),
+                }
+            )
+        if reductions:
+            best_budget_summary = max(reductions, key=lambda item: item["failed_reduction"])
 
     context.update(
         {
             "page_title": "Optimization Analysis",
             "optimization_runs": optimization_runs,
             "optimization_groups": optimization_groups,
+            "best_budget_summary": best_budget_summary,
             "optimization_chart_labels": json.dumps(chart_labels),
             "optimization_greedy_values": json.dumps(greedy_values),
             "optimization_random_values": json.dumps(random_values),
+            "optimization_greedy_resilience_values": json.dumps(greedy_resilience_values),
+            "optimization_random_resilience_values": json.dumps(random_resilience_values),
         }
     )
     return render(request, "dashboard/optimization_analysis.html", context)
@@ -941,9 +1226,16 @@ def optimization_analysis(request):
 
 def route_planner(request):
     context = get_dashboard_state(request)
-    source_id = request.GET.get("source", "").strip()
-    target_id = request.GET.get("target", "").strip()
+    source_id = request.GET.get("source_road_id", "").strip()
+    target_id = request.GET.get("target_road_id", "").strip()
+    origin_name = request.GET.get("origin_name", "").strip()
+    destination_name = request.GET.get("destination_name", "").strip()
+    travel_profile = request.GET.get("travel_profile", "driving").strip() or "driving"
     mode = request.GET.get("mode", "safe").strip() or "safe"
+    origin_lng = request.GET.get("origin_lng", "").strip()
+    origin_lat = request.GET.get("origin_lat", "").strip()
+    destination_lng = request.GET.get("destination_lng", "").strip()
+    destination_lat = request.GET.get("destination_lat", "").strip()
 
     failed_ids = set()
     if context["custom_scale"] is not None:
@@ -958,6 +1250,36 @@ def route_planner(request):
     route_comparison = None
     route_segments = []
     baseline_route_segments = []
+    safe_route_reasons = []
+    blocked_baseline_overlap = 0
+    baseline_safety_score = None
+    resilient_safety_score = None
+    route_recommendation = None
+    scenario_snapshots = []
+    mapbox_routes = []
+    mapbox_primary_route = None
+    mapbox_error = ""
+    origin_point = None
+    destination_point = None
+
+    if origin_lng and origin_lat and destination_lng and destination_lat:
+        origin_point = (safe_float(origin_lng), safe_float(origin_lat))
+        destination_point = (safe_float(destination_lng), safe_float(destination_lat))
+        mapbox_payload = mapbox_directions(origin_point, destination_point, travel_profile=travel_profile)
+        if mapbox_payload and mapbox_payload.get("routes"):
+            mapbox_routes = [
+                summarize_mapbox_route(route, index)
+                for index, route in enumerate(mapbox_payload.get("routes", []))
+            ]
+            mapbox_primary_route = mapbox_routes[0]
+        elif mapbox_enabled():
+            mapbox_error = "Live directions could not be retrieved from Mapbox for the selected places."
+
+        if not source_id:
+            source_id = nearest_road_id(origin_point[0], origin_point[1])
+        if not target_id:
+            target_id = nearest_road_id(destination_point[0], destination_point[1])
+
     if source_id and target_id:
         route_result = safest_route_result(source_id, target_id, failed_ids, mode=mode)
         baseline_route_result = safest_route_result(source_id, target_id, set(), mode=mode)
@@ -986,16 +1308,83 @@ def route_planner(request):
                 {"id": road_id, "label": road_display_label(road_id)}
                 for road_id in baseline_route_result["route_ids"]
             ]
+            blocked_baseline_overlap = sum(
+                1 for road_id in baseline_route_result["route_ids"]
+                if road_id in failed_ids and road_id not in {source_id, target_id}
+            )
+            baseline_safety_score = route_safety_score(
+                baseline_route_result["metrics"],
+                blocked_overlap=blocked_baseline_overlap,
+            )
+            resilient_safety_score = route_safety_score(route_result["metrics"], blocked_overlap=0)
+            safe_route_reasons = [
+                {
+                    "title": "Failed roads excluded",
+                    "detail": f"The safe route avoids {len(failed_ids)} failed road segments active under severity {context['selected_severity']['slug']}.",
+                },
+                {
+                    "title": "Flood risk penalized",
+                    "detail": f"The {mode} mode adds extra cost to segments with higher flood risk, so the reroute tries to move away from unstable corridors.",
+                },
+                {
+                    "title": "Critical links considered",
+                    "detail": "Critical roads receive extra penalty so the route is less likely to depend on high-impact bottlenecks during disruption.",
+                },
+            ]
+            if route_comparison["risk_delta"] < 0:
+                safe_route_reasons.append(
+                    {
+                        "title": "Lower risk than local baseline",
+                        "detail": f"This reroute reduces average flood risk by {abs(route_comparison['risk_delta'])} compared with the graph baseline route.",
+                    }
+                )
+            if route_comparison["length_delta"] > 0:
+                safe_route_reasons.append(
+                    {
+                        "title": "Safety over shortest path",
+                        "detail": f"The route is {route_comparison['length_delta']} units longer because it trades extra distance for lower infrastructure risk.",
+                    }
+                )
+            if blocked_baseline_overlap > 0:
+                safe_route_reasons.append(
+                    {
+                        "title": "Unsafe baseline overlap detected",
+                        "detail": f"The local baseline route touches {blocked_baseline_overlap} segments that are failed under the selected severity, so the resilience route is safer for this trip.",
+                    }
+                )
+            route_recommendation = build_route_recommendation(
+                mapbox_primary_route,
+                route_result,
+                route_comparison,
+                blocked_baseline_overlap,
+            )
+
+    if source_id and target_id:
+        scenario_snapshots = scenario_route_snapshots(source_id, target_id, mode)
 
     context.update(
         {
             "page_title": "Safe Rerouting",
+            "mapbox_enabled": mapbox_enabled(),
+            "mapbox_public_token": mapbox_public_token(),
+            "mapbox_error": mapbox_error,
+            "mapbox_primary_route": mapbox_primary_route,
+            "mapbox_routes": mapbox_routes,
             "route_result": route_result,
             "baseline_route_result": baseline_route_result,
             "route_source": source_id,
             "route_target": target_id,
-            "route_source_label": road_display_label(source_id),
-            "route_target_label": road_display_label(target_id),
+            "route_source_label": origin_name or road_display_label(source_id),
+            "route_target_label": destination_name or road_display_label(target_id),
+            "route_source_road_label": road_display_label(source_id),
+            "route_target_road_label": road_display_label(target_id),
+            "origin_name": origin_name,
+            "destination_name": destination_name,
+            "origin_lng": origin_lng,
+            "origin_lat": origin_lat,
+            "destination_lng": destination_lng,
+            "destination_lat": destination_lat,
+            "travel_profile": travel_profile,
             "route_mode": mode,
             "route_mode_options": [
                 ("safe", "Safest"),
@@ -1003,12 +1392,27 @@ def route_planner(request):
                 ("fast", "Fastest Practical"),
                 ("emergency", "Emergency Response"),
             ],
+            "travel_profile_options": [
+                ("driving", "Driving With Traffic"),
+                ("walking", "Walking"),
+                ("cycling", "Cycling"),
+            ],
             "route_examples": route_examples(),
             "route_comparison": route_comparison,
             "route_segments": route_segments,
             "baseline_route_segments": baseline_route_segments,
+            "safe_route_reasons": safe_route_reasons,
+            "blocked_baseline_overlap": blocked_baseline_overlap,
+            "baseline_safety_score": baseline_safety_score,
+            "resilient_safety_score": resilient_safety_score,
+            "route_recommendation": route_recommendation,
+            "scenario_snapshots": scenario_snapshots,
             "route_geojson": json.dumps(route_result["route_geojson"]) if route_result and not route_result.get("error") else "null",
             "baseline_route_geojson": json.dumps(baseline_route_result["route_geojson"]) if baseline_route_result and not baseline_route_result.get("error") else "null",
+            "mapbox_primary_geojson": json.dumps(mapbox_primary_route["geometry"]) if mapbox_primary_route else "null",
+            "mapbox_alternative_geojsons": json.dumps([route["geometry"] for route in mapbox_routes[1:3]]) if mapbox_routes else "[]",
+            "mapbox_origin_point": json.dumps([origin_point[1], origin_point[0]]) if origin_point else "null",
+            "mapbox_destination_point": json.dumps([destination_point[1], destination_point[0]]) if destination_point else "null",
             "route_mode_descriptions": {
                 "safe": "Prioritizes lower flood risk and lower criticality, even if the route becomes longer.",
                 "balanced": "Trades off safety and travel burden for a more practical day-to-day reroute.",

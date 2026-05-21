@@ -1,15 +1,15 @@
 {% extends "dashboard/base.html" %}
 
 {% block title %}Safe Rerouting{% endblock %}
-{% block hero_title %}Safe Rerouting Planner{% endblock %}
-{% block hero_subtitle %}Explore alternative routes after flood-driven failures using safety-aware, balanced, or emergency routing costs on the infrastructure graph.{% endblock %}
+{% block hero_title %}Resilience-Aware Smart Rerouting{% endblock %}
+{% block hero_subtitle %}Combine live directions with flood-failure intelligence so the team can compare a normal route against a safer infrastructure-aware reroute.{% endblock %}
 
 {% block head_extras %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <style>
     #route-map {
-        height: 560px;
+        height: 640px;
         border-radius: 18px;
         overflow: hidden;
         border: 1px solid var(--line);
@@ -18,8 +18,8 @@
 
     .route-form {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
+        grid-template-columns: 1.3fr 56px 1.3fr 0.9fr 0.9fr auto;
+        gap: 14px;
         align-items: end;
     }
 
@@ -40,15 +40,27 @@
         box-sizing: border-box;
     }
 
-    .route-form button,
-    .quick-pick {
-        padding: 12px 16px;
+    .primary-button,
+    .quick-pick,
+    .swap-button {
         border-radius: 999px;
         border: 1px solid var(--accent);
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .primary-button {
+        padding: 12px 18px;
         background: var(--accent);
         color: #fff;
-        font-weight: bold;
-        cursor: pointer;
+    }
+
+    .swap-button {
+        width: 56px;
+        height: 48px;
+        background: #fff5ea;
+        color: var(--accent-dark);
+        font-size: 1.05rem;
     }
 
     .search-shell {
@@ -66,7 +78,7 @@
         border-radius: 12px;
         box-shadow: 0 14px 24px rgba(70, 47, 24, 0.10);
         display: none;
-        max-height: 220px;
+        max-height: 240px;
         overflow-y: auto;
     }
 
@@ -84,27 +96,11 @@
         background: #fff6e8;
     }
 
-    .selection-grid,
-    .route-steps {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-        margin-top: 16px;
-    }
-
-    .selection-card {
-        min-height: 110px;
-    }
-
-    .selection-state,
-    .helper-note {
-        margin-top: 10px;
+    .search-kind {
+        display: inline-block;
+        margin-top: 4px;
         color: var(--muted);
-    }
-
-    .selection-state {
-        color: var(--accent-dark);
-        font-weight: bold;
+        font-size: 0.82rem;
     }
 
     .quick-picks {
@@ -116,6 +112,36 @@
 
     .quick-pick {
         padding: 8px 12px;
+        background: #fff;
+        color: var(--ink);
+    }
+
+    .selection-grid,
+    .route-steps,
+    .reason-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    .reason-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .selection-card {
+        min-height: 120px;
+    }
+
+    .selection-state,
+    .helper-note {
+        margin-top: 10px;
+        color: var(--muted);
+    }
+
+    .selection-state {
+        color: var(--accent-dark);
+        font-weight: bold;
     }
 
     .route-legend {
@@ -144,7 +170,7 @@
         margin: 0;
         padding-left: 18px;
         color: var(--muted);
-        max-height: 260px;
+        max-height: 320px;
         overflow-y: auto;
     }
 
@@ -152,19 +178,95 @@
         margin-bottom: 8px;
     }
 
+    .route-card-fast {
+        border: 1px solid rgba(71, 85, 105, 0.16);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .route-card-safe {
+        border: 1px solid rgba(29, 78, 216, 0.18);
+        background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+    }
+
+    .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #f3eadc;
+        color: var(--accent-dark);
+        font-size: 0.82rem;
+        font-weight: bold;
+    }
+
+    .warning-box {
+        border: 1px solid #efc7b2;
+        background: #fff8f4;
+    }
+
+    .soft-box {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+    }
+
+    .recommendation-card {
+        border: 1px solid rgba(29, 78, 216, 0.18);
+        background: linear-gradient(180deg, #ffffff 0%, #eef6ff 100%);
+    }
+
+    .snapshot-table td.unavailable {
+        color: #b45309;
+        font-weight: bold;
+    }
+
+    .map-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+    }
+
+    .map-toggle {
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    @media (max-width: 1080px) {
+        .route-form {
+            grid-template-columns: 1fr 56px 1fr;
+        }
+    }
+
     @media (max-width: 900px) {
-        .route-form,
         .selection-grid,
-        .route-steps {
-            grid-template-columns: 1fr 1fr;
+        .route-steps,
+        .reason-grid {
+            grid-template-columns: 1fr;
         }
     }
 
     @media (max-width: 640px) {
-        .route-form,
-        .selection-grid,
-        .route-steps {
+        .route-form {
             grid-template-columns: 1fr;
+        }
+
+        .swap-button {
+            width: 100%;
         }
     }
 </style>
@@ -173,8 +275,8 @@
 {% block content %}
 <section class="section">
     <h2>Rerouting Controls</h2>
-    <span class="kicker">Separate Add-On Module</span>
-    <form method="get" action="/routing/" class="route-form">
+    <span class="kicker">Live Directions + Research Intelligence</span>
+    <form method="get" action="/routing/" class="route-form" id="smart-route-form">
         {% if selected_scenario %}
             <input type="hidden" name="scenario" value="{{ selected_scenario.slug }}">
         {% endif %}
@@ -183,27 +285,45 @@
         {% else %}
             <input type="hidden" name="severity" value="{{ selected_severity.slug }}">
         {% endif %}
-        <input type="hidden" id="source" name="source" value="{{ route_source }}">
-        <input type="hidden" id="target" name="target" value="{{ route_target }}">
+
+        <input type="hidden" id="origin_lng" name="origin_lng" value="{{ origin_lng }}">
+        <input type="hidden" id="origin_lat" name="origin_lat" value="{{ origin_lat }}">
+        <input type="hidden" id="destination_lng" name="destination_lng" value="{{ destination_lng }}">
+        <input type="hidden" id="destination_lat" name="destination_lat" value="{{ destination_lat }}">
+        <input type="hidden" id="source_road_id" name="source_road_id" value="{{ route_source }}">
+        <input type="hidden" id="target_road_id" name="target_road_id" value="{{ route_target }}">
 
         <div>
-            <label for="source_display">Source road</label>
+            <label for="origin_name">Origin</label>
             <div class="search-shell">
-                <input id="source_display" value="{{ route_source_label }}" placeholder="Search by road id or name">
-                <div id="source_results" class="search-results"></div>
+                <input id="origin_name" name="origin_name" value="{{ origin_name }}" placeholder="Search place, area, or click road">
+                <div id="origin_results" class="search-results"></div>
             </div>
         </div>
 
         <div>
-            <label for="target_display">Target road</label>
+            <button type="button" class="swap-button" id="swap-route-button" title="Swap origin and destination">⇄</button>
+        </div>
+
+        <div>
+            <label for="destination_name">Destination</label>
             <div class="search-shell">
-                <input id="target_display" value="{{ route_target_label }}" placeholder="Search by road id or name">
-                <div id="target_results" class="search-results"></div>
+                <input id="destination_name" name="destination_name" value="{{ destination_name }}" placeholder="Search destination or click road">
+                <div id="destination_results" class="search-results"></div>
             </div>
         </div>
 
         <div>
-            <label for="mode">Routing mode</label>
+            <label for="travel_profile">Travel profile</label>
+            <select id="travel_profile" name="travel_profile">
+                {% for value, label in travel_profile_options %}
+                    <option value="{{ value }}" {% if travel_profile == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="mode">Resilience mode</label>
             <select id="mode" name="mode">
                 {% for value, label in route_mode_options %}
                     <option value="{{ value }}" {% if route_mode == value %}selected{% endif %}>{{ label }}</option>
@@ -212,169 +332,287 @@
         </div>
 
         <div>
-            <button type="submit">Find reroute</button>
+            <button type="submit" class="primary-button" id="generate-route-button">Generate Smart Routes</button>
         </div>
     </form>
 
     <div class="card" style="margin-top: 16px;">
-        <div class="label">Quick road picks</div>
-        <div class="subvalue">Use these to fill source and target quickly if you do not want to search manually.</div>
+        <div class="label">Quick map starts</div>
+        <div class="subvalue">Use one of these critical locations as a fast start, or click on the road layer below to select origin and destination directly.</div>
         <div class="quick-picks">
             {% for road in route_examples %}
-                <button class="quick-pick" type="button" data-road-id="{{ road.id }}" data-road-label="{{ road.label }}">
-                    {{ road.label }}
-                </button>
+                {% if road.center %}
+                    <button
+                        class="quick-pick"
+                        type="button"
+                        data-road-id="{{ road.id }}"
+                        data-road-label="{{ road.label }}"
+                        data-road-lng="{{ road.center.0 }}"
+                        data-road-lat="{{ road.center.1 }}"
+                    >
+                        {{ road.label }}
+                    </button>
+                {% endif %}
             {% endfor %}
         </div>
     </div>
 
     <div class="selection-grid">
         <div class="card selection-card">
-            <div class="label">Current source selection</div>
-            <div class="value" id="source_label_preview" style="font-size: 1.05rem;">
-                {% if route_source_label %}{{ route_source_label }}{% else %}No source selected yet{% endif %}
+            <div class="label">Current origin</div>
+            <div class="value" id="origin_preview" style="font-size: 1.05rem;">
+                {% if route_source_label %}{{ route_source_label }}{% else %}No origin selected yet{% endif %}
             </div>
-            <div class="helper-note">First map click or first search selection fills the source.</div>
+            <div class="helper-note">Search a place, use a quick pick, or click a road to set the origin.</div>
         </div>
         <div class="card selection-card">
-            <div class="label">Current target selection</div>
-            <div class="value" id="target_label_preview" style="font-size: 1.05rem;">
-                {% if route_target_label %}{{ route_target_label }}{% else %}No target selected yet{% endif %}
+            <div class="label">Current destination</div>
+            <div class="value" id="destination_preview" style="font-size: 1.05rem;">
+                {% if route_target_label %}{{ route_target_label }}{% else %}No destination selected yet{% endif %}
             </div>
-            <div class="helper-note">Second map click or second search selection fills the target.</div>
+            <div class="helper-note">Then choose the destination and the page can auto-generate the route.</div>
         </div>
     </div>
 
     <div class="card" style="margin-top: 16px;">
-        <div class="label">Mode explanation</div>
+        <div class="label">How this differs from a normal maps route</div>
         <div class="subvalue">
-            <strong>{{ route_mode|title }}</strong>:
-            {% if route_mode == 'safe' %}{{ route_mode_descriptions.safe }}{% endif %}
-            {% if route_mode == 'balanced' %}{{ route_mode_descriptions.balanced }}{% endif %}
-            {% if route_mode == 'fast' %}{{ route_mode_descriptions.fast }}{% endif %}
-            {% if route_mode == 'emergency' %}{{ route_mode_descriptions.emergency }}{% endif %}
-        </div>
-        <div class="subvalue" style="margin-top: 10px;">
-            Tip: click any road segment on the map to set the source and target inputs.
+            The live route uses a real directions engine. The resilience route adds your flood-failure logic by steering away from failed segments and high-risk corridors under the selected severity.
         </div>
         <div class="selection-state" id="selection_state">
-            Choose a source road first, then choose a target road, then click <strong>Find reroute</strong>.
+            Choose an origin first, then a destination, then click <strong>Generate Smart Routes</strong>.
         </div>
     </div>
-</section>
 
-<section class="section">
-    <h2>Route Summary</h2>
-    {% if route_result and not route_result.error %}
-        <div class="grid">
-            <div class="card">
-                <div class="label">Source</div>
-                <div class="value" style="font-size: 1.05rem;">{{ route_source_label }}</div>
-            </div>
-            <div class="card">
-                <div class="label">Target</div>
-                <div class="value" style="font-size: 1.05rem;">{{ route_target_label }}</div>
-            </div>
-            <div class="card">
-                <div class="label">Mode</div>
-                <div class="value" style="font-size: 1.15rem;">{{ route_result.mode|title }}</div>
-            </div>
-            <div class="card">
-                <div class="label">Segments</div>
-                <div class="value">{{ route_result.metrics.segment_count }}</div>
-            </div>
+    {% if not mapbox_enabled %}
+        <div class="card warning-box" style="margin-top: 16px;">
+            <div class="label">Live API not enabled yet</div>
+            <div class="subvalue">Add `MAPBOX_PUBLIC_TOKEN` and `MAPBOX_SECRET_TOKEN` to a local `.env` file in the project root to unlock live place search and route directions.</div>
         </div>
-
-        <div class="grid" style="margin-top: 16px;">
-            <div class="card">
-                <div class="label">Total Length</div>
-                <div class="value">{{ route_result.metrics.total_length }}</div>
-            </div>
-            <div class="card">
-                <div class="label">Average Traffic</div>
-                <div class="value">{{ route_result.metrics.avg_traffic }}</div>
-            </div>
-            <div class="card">
-                <div class="label">Average Flood Risk</div>
-                <div class="value">{{ route_result.metrics.avg_flood_risk }}</div>
-            </div>
-        </div>
-
-        {% if baseline_route_result and not baseline_route_result.error %}
-            <div class="grid" style="margin-top: 16px;">
-                <div class="card">
-                    <div class="label">Baseline Segments</div>
-                    <div class="value">{{ baseline_route_result.metrics.segment_count }}</div>
-                </div>
-                <div class="card">
-                    <div class="label">Baseline Length</div>
-                    <div class="value">{{ baseline_route_result.metrics.total_length }}</div>
-                </div>
-                <div class="card">
-                    <div class="label">Reroute Length Delta</div>
-                    <div class="value">{{ route_comparison.length_delta }}</div>
-                </div>
-                <div class="card">
-                    <div class="label">Baseline Avg Flood Risk</div>
-                    <div class="value">{{ baseline_route_result.metrics.avg_flood_risk }}</div>
-                </div>
-            </div>
-            <div class="grid" style="margin-top: 16px;">
-                <div class="card">
-                    <div class="label">Segment Delta</div>
-                    <div class="value">{{ route_comparison.segment_delta }}</div>
-                </div>
-                <div class="card">
-                    <div class="label">Flood Risk Delta</div>
-                    <div class="value">{{ route_comparison.risk_delta }}</div>
-                </div>
-            </div>
-        {% endif %}
-
-        <div class="card" style="margin-top: 16px;">
-            <div class="label">Reroute output</div>
-            <div class="subvalue">The list below is the actual segment-by-segment path currently suggested by the resilience graph.</div>
-        </div>
-
-        <div class="route-steps">
-            <div class="card">
-                <div class="label">Suggested reroute segments</div>
-                <ol class="step-list">
-                    {% for segment in route_segments %}
-                        <li><strong>{{ segment.label }}</strong><br><span class="subvalue">{{ segment.id }}</span></li>
-                    {% endfor %}
-                </ol>
-            </div>
-            <div class="card">
-                <div class="label">Baseline route segments</div>
-                <ol class="step-list">
-                    {% for segment in baseline_route_segments %}
-                        <li><strong>{{ segment.label }}</strong><br><span class="subvalue">{{ segment.id }}</span></li>
-                    {% endfor %}
-                </ol>
-            </div>
-        </div>
-    {% elif route_result and route_result.error %}
-        <div class="card">
-            <div class="label">Routing status</div>
-            <div class="subvalue">{{ route_result.error }}</div>
-        </div>
-    {% else %}
-        <div class="card">
-            <div class="subvalue">Select a source and target road, then click <strong>Find reroute</strong> to generate a route output.</div>
+    {% endif %}
+    {% if mapbox_error %}
+        <div class="card warning-box" style="margin-top: 16px;">
+            <div class="label">Live directions status</div>
+            <div class="subvalue">{{ mapbox_error }}</div>
         </div>
     {% endif %}
 </section>
 
 <section class="section">
+    <h2>Smart Route Comparison</h2>
+    <div class="selection-grid">
+        <div class="card route-card-fast">
+            <div class="label">Fastest live route</div>
+            {% if mapbox_primary_route %}
+                <div class="value">{{ mapbox_primary_route.duration_min }} min</div>
+                <div class="subvalue">{{ mapbox_primary_route.distance_km }} km by {{ travel_profile }}</div>
+                <div class="badge-row">
+                    <span class="badge">Live directions</span>
+                    <span class="badge">Turn-by-turn ready</span>
+                    <span class="badge">Best for speed</span>
+                </div>
+            {% else %}
+                <div class="subvalue">Generate a route to see live travel time and distance.</div>
+            {% endif %}
+        </div>
+        <div class="card route-card-safe">
+            <div class="label">Resilience route</div>
+            {% if route_result and not route_result.error %}
+                <div class="value">{{ route_result.metrics.segment_count }} segments</div>
+                <div class="subvalue">Avg flood risk {{ route_result.metrics.avg_flood_risk }} | mode {{ route_mode|title }}</div>
+                <div class="badge-row">
+                    <span class="badge">Infrastructure-aware</span>
+                    <span class="badge">{{ failed_count }} failed roads filtered</span>
+                    <span class="badge">Safer under disruption</span>
+                </div>
+            {% else %}
+                <div class="subvalue">The resilience path will appear here after route generation.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+        <div class="card">
+            <div class="label">Selected severity</div>
+            <div class="value" style="font-size: 1.2rem;">{{ selected_severity.label }}</div>
+            <div class="subvalue">{{ failed_count }} failed roads currently active in the scenario.</div>
+        </div>
+        <div class="card">
+            <div class="label">Nearest mapped roads</div>
+            <div class="subvalue"><strong>Origin:</strong> {{ route_source_road_label|default:"Not resolved yet" }}</div>
+            <div class="subvalue"><strong>Destination:</strong> {{ route_target_road_label|default:"Not resolved yet" }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Length delta vs graph baseline</div>
+            <div class="value">{% if route_comparison %}{{ route_comparison.length_delta }}{% else %}N/A{% endif %}</div>
+        </div>
+        <div class="card">
+            <div class="label">Flood risk delta vs graph baseline</div>
+            <div class="value">{% if route_comparison %}{{ route_comparison.risk_delta }}{% else %}N/A{% endif %}</div>
+        </div>
+    </div>
+
+    {% if route_recommendation %}
+        <div class="card recommendation-card" style="margin-top: 16px;">
+            <div class="label">{{ route_recommendation.label }}</div>
+            <div class="subvalue">{{ route_recommendation.reason }}</div>
+            <div class="badge-row">
+                <span class="badge">Baseline safety: {{ route_recommendation.live_score }}</span>
+                <span class="badge">Resilience safety: {{ route_recommendation.safe_score }}</span>
+                {% if blocked_baseline_overlap > 0 %}
+                    <span class="badge">{{ blocked_baseline_overlap }} blocked baseline segments</span>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if route_result and not route_result.error %}
+        <div class="grid" style="margin-top: 16px;">
+            <div class="card">
+                <div class="label">Resilience route length</div>
+                <div class="value">{{ route_result.metrics.total_length }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average traffic</div>
+                <div class="value">{{ route_result.metrics.avg_traffic }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Segment delta vs graph baseline</div>
+                <div class="value">{{ route_comparison.segment_delta }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Graph baseline avg flood risk</div>
+                <div class="value">{% if baseline_route_result %}{{ baseline_route_result.metrics.avg_flood_risk }}{% else %}N/A{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">Graph baseline safety score</div>
+                <div class="value">{% if baseline_safety_score != None %}{{ baseline_safety_score }}{% else %}N/A{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">Resilience safety score</div>
+                <div class="value">{% if resilient_safety_score != None %}{{ resilient_safety_score }}{% else %}N/A{% endif %}</div>
+            </div>
+        </div>
+    {% elif route_result and route_result.error %}
+        <div class="card warning-box" style="margin-top: 16px;">
+            <div class="label">Resilience routing status</div>
+            <div class="subvalue">{{ route_result.error }}</div>
+        </div>
+    {% endif %}
+</section>
+
+{% if safe_route_reasons %}
+<section class="section">
+    <h2>Why The Safe Route Was Chosen</h2>
+    <div class="reason-grid">
+        {% for reason in safe_route_reasons %}
+            <div class="soft-box">
+                <div class="label">{{ reason.title }}</div>
+                <div class="subvalue">{{ reason.detail }}</div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if scenario_snapshots %}
+<section class="section">
+    <h2>Same Trip Across Scenarios</h2>
+    <p class="subvalue">This compares the same origin and destination under the saved severity presets so you can show how trip robustness changes as disruption increases.</p>
+    <table class="snapshot-table">
+        <thead>
+            <tr>
+                <th>Severity</th>
+                <th>Route Available</th>
+                <th>Segments</th>
+                <th>Avg Flood Risk</th>
+                <th>Safety Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in scenario_snapshots %}
+                <tr>
+                    <td>{{ row.severity_label }}</td>
+                    <td class="{% if not row.route_available %}unavailable{% endif %}">
+                        {% if row.route_available %}Yes{% else %}No{% endif %}
+                    </td>
+                    <td>{% if row.segment_count != None %}{{ row.segment_count }}{% else %}-{% endif %}</td>
+                    <td>{% if row.avg_flood_risk != None %}{{ row.avg_flood_risk }}{% else %}-{% endif %}</td>
+                    <td>{{ row.safety_score }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if mapbox_routes %}
+<section class="section">
+    <h2>Alternative Live Routes</h2>
+    <div class="grid">
+        {% for route in mapbox_routes %}
+            <div class="card {% if forloop.first %}route-card-fast{% endif %}">
+                <div class="label">{{ route.label }}</div>
+                <div class="value">{{ route.duration_min }} min</div>
+                <div class="subvalue">{{ route.distance_km }} km</div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if mapbox_primary_route or route_segments %}
+<section class="section">
+    <h2>Turn-By-Turn And Resilience Output</h2>
+    <div class="route-steps">
+        <div class="card">
+            <div class="label">Live directions steps</div>
+            {% if mapbox_primary_route %}
+                <ol class="step-list">
+                    {% for step in mapbox_primary_route.steps %}
+                        <li>
+                            <strong>{{ step.instruction }}</strong><br>
+                            <span class="subvalue">{{ step.distance_m }} m | {{ step.duration_s }} s</span>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <div class="subvalue">Live step-by-step instructions will appear here after a route is generated.</div>
+            {% endif %}
+        </div>
+        <div class="card">
+            <div class="label">Resilience route segments</div>
+            {% if route_segments %}
+                <ol class="step-list">
+                    {% for segment in route_segments %}
+                        <li>
+                            <strong>{{ segment.label }}</strong><br>
+                            <span class="subvalue">{{ segment.id }}</span>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <div class="subvalue">The infrastructure-aware reroute segment list will appear here after a route is generated.</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="section">
     <h2>Route Map</h2>
-    <span class="kicker">Separate Visualization</span>
+    <span class="kicker">Live Navigation Layer + Safe Reroute Layer</span>
+    <div class="map-toolbar">
+        <div class="subvalue">The flood-risk road overlay is now muted so the route lines stay readable.</div>
+        <button type="button" class="map-toggle" id="toggle-risk-overlay">Show risk overlay</button>
+    </div>
     <div id="route-map"></div>
     <div class="route-legend">
-        <span><i style="background:#64748b; border-top:2px dashed #64748b;"></i>Baseline route</span>
-        <span><i style="background:#1d4ed8;"></i>Rerouted path</span>
-        <span><i style="background:#16a34a; width:12px; height:12px; border-radius:999px;"></i>Source</span>
-        <span><i style="background:#dc2626; width:12px; height:12px; border-radius:999px;"></i>Target</span>
+        <span><i style="background:#475569;"></i>Fastest live route</span>
+        <span><i style="background:#f59e0b;"></i>Alternative live route</span>
+        <span><i style="background:#1d4ed8;"></i>Resilience reroute</span>
+        <span><i style="background:#16a34a; width:12px; height:12px; border-radius:999px;"></i>Origin</span>
+        <span><i style="background:#dc2626; width:12px; height:12px; border-radius:999px;"></i>Destination</span>
     </div>
 </section>
 {% endblock %}
@@ -382,105 +620,143 @@
 {% block scripts %}
 <script>
     const roadsGeoJson = {{ roads_geojson|safe }};
-    const routeGeoJson = {{ route_geojson|safe }};
-    const baselineRouteGeoJson = {{ baseline_route_geojson|safe }};
+    const mapboxPrimaryGeoJson = {{ mapbox_primary_geojson|safe }};
+    const mapboxAlternativeGeoJsons = {{ mapbox_alternative_geojsons|safe }};
+    const resilienceGeoJson = {{ route_geojson|safe }};
+    const originPoint = {{ mapbox_origin_point|safe }};
+    const destinationPoint = {{ mapbox_destination_point|safe }};
+    const mapboxPublicToken = "{{ mapbox_public_token|escapejs }}";
 
     const map = L.map("route-map", { preferCanvas: true }).setView([18.5204, 73.8567], 11);
-    const sourceInput = document.getElementById("source");
-    const targetInput = document.getElementById("target");
-    const sourceDisplay = document.getElementById("source_display");
-    const targetDisplay = document.getElementById("target_display");
-    const sourceResults = document.getElementById("source_results");
-    const targetResults = document.getElementById("target_results");
-    const sourcePreview = document.getElementById("source_label_preview");
-    const targetPreview = document.getElementById("target_label_preview");
+    const routeForm = document.getElementById("smart-route-form");
+    const originNameInput = document.getElementById("origin_name");
+    const destinationNameInput = document.getElementById("destination_name");
+    const originLngInput = document.getElementById("origin_lng");
+    const originLatInput = document.getElementById("origin_lat");
+    const destinationLngInput = document.getElementById("destination_lng");
+    const destinationLatInput = document.getElementById("destination_lat");
+    const sourceRoadInput = document.getElementById("source_road_id");
+    const targetRoadInput = document.getElementById("target_road_id");
+    const originResults = document.getElementById("origin_results");
+    const destinationResults = document.getElementById("destination_results");
+    const originPreview = document.getElementById("origin_preview");
+    const destinationPreview = document.getElementById("destination_preview");
     const selectionState = document.getElementById("selection_state");
     const quickPicks = Array.from(document.querySelectorAll(".quick-pick"));
+    const swapButton = document.getElementById("swap-route-button");
+    const toggleRiskOverlayButton = document.getElementById("toggle-risk-overlay");
 
-    let nextSelection = sourceInput.value ? (targetInput.value ? "source" : "target") : "source";
-    let sourceMarker = null;
-    let targetMarker = null;
+    let nextSelection = originLngInput.value ? (destinationLngInput.value ? "origin" : "destination") : "origin";
+    let originMarker = null;
+    let destinationMarker = null;
+    let autoSubmitTimer = null;
+    let baseLayer = null;
+    let riskOverlayVisible = false;
+
+    function readyForSubmit() {
+        return originLngInput.value && originLatInput.value && destinationLngInput.value && destinationLatInput.value;
+    }
 
     function updateSelectionState() {
-        if (!sourceInput.value) {
-            selectionState.innerHTML = 'Choose a source road first, then choose a target road, then click <strong>Find reroute</strong>.';
+        if (!originLngInput.value || !originLatInput.value) {
+            selectionState.innerHTML = 'Choose an origin first, then a destination, then click <strong>Generate Smart Routes</strong>.';
             return;
         }
-        if (!targetInput.value) {
-            selectionState.innerHTML = 'Source selected. Choose a target road next, then click <strong>Find reroute</strong>.';
+        if (!destinationLngInput.value || !destinationLatInput.value) {
+            selectionState.innerHTML = 'Origin selected. Choose a destination next, then click <strong>Generate Smart Routes</strong>.';
             return;
         }
-        selectionState.innerHTML = 'Source and target are selected. Click <strong>Find reroute</strong> to generate the output path.';
+        selectionState.innerHTML = 'Origin and destination are ready. The page can auto-generate smart routes, or you can click <strong>Generate Smart Routes</strong> manually.';
     }
 
-    function featureCenter(feature) {
-        const geometry = feature?.geometry || {};
-        const coords = geometry.coordinates || [];
-        let flat = [];
-        if (geometry.type === "LineString") {
-            flat = coords;
-        } else if (geometry.type === "MultiLineString") {
-            coords.forEach(segment => flat.push(...segment));
-        }
-        if (!flat.length) return null;
-        const lat = flat.reduce((sum, point) => sum + point[1], 0) / flat.length;
-        const lon = flat.reduce((sum, point) => sum + point[0], 0) / flat.length;
-        return [lat, lon];
+    function scheduleAutoSubmit() {
+        if (!readyForSubmit()) return;
+        window.clearTimeout(autoSubmitTimer);
+        autoSubmitTimer = window.setTimeout(() => {
+            routeForm.submit();
+        }, 600);
     }
 
-    function setMarker(kind, feature) {
-        const point = featureCenter(feature);
-        if (!point) return;
+    function addMarker(kind, latlng, label) {
+        const config = kind === "origin"
+            ? { color: "#16a34a", popup: `Origin: ${label}` }
+            : { color: "#dc2626", popup: `Destination: ${label}` };
 
-        const markerConfig = kind === "source"
-            ? { color: "#16a34a", label: "Source" }
-            : { color: "#dc2626", label: "Target" };
-
-        if (kind === "source" && sourceMarker) {
-            map.removeLayer(sourceMarker);
-        }
-        if (kind === "target" && targetMarker) {
-            map.removeLayer(targetMarker);
-        }
-
-        const marker = L.circleMarker(point, {
+        const marker = L.circleMarker(latlng, {
             radius: 8,
-            color: markerConfig.color,
-            fillColor: markerConfig.color,
+            color: config.color,
+            fillColor: config.color,
             fillOpacity: 1
-        }).addTo(map).bindPopup(markerConfig.label);
+        }).addTo(map).bindPopup(config.popup);
 
-        if (kind === "source") {
-            sourceMarker = marker;
+        if (kind === "origin") {
+            if (originMarker) map.removeLayer(originMarker);
+            originMarker = marker;
         } else {
-            targetMarker = marker;
+            if (destinationMarker) map.removeLayer(destinationMarker);
+            destinationMarker = marker;
         }
     }
 
-    function applySelection(kind, roadId, label, feature = null) {
-        if (kind === "source") {
-            sourceInput.value = roadId;
-            sourceDisplay.value = label;
-            sourcePreview.textContent = label;
-            nextSelection = "target";
+    function applySelection(kind, item, shouldAutoSubmit = true) {
+        const label = item.label || "Selected location";
+        const lng = item.lng;
+        const lat = item.lat;
+        const roadId = item.road_id || "";
+
+        if (kind === "origin") {
+            originNameInput.value = label;
+            originPreview.textContent = label;
+            originLngInput.value = lng ?? "";
+            originLatInput.value = lat ?? "";
+            sourceRoadInput.value = roadId;
+            nextSelection = "destination";
         } else {
-            targetInput.value = roadId;
-            targetDisplay.value = label;
-            targetPreview.textContent = label;
-            nextSelection = "source";
+            destinationNameInput.value = label;
+            destinationPreview.textContent = label;
+            destinationLngInput.value = lng ?? "";
+            destinationLatInput.value = lat ?? "";
+            targetRoadInput.value = roadId;
+            nextSelection = "origin";
         }
 
-        if (feature) {
-            setMarker(kind, feature);
+        if (lat !== null && lng !== null && lat !== undefined && lng !== undefined) {
+            addMarker(kind, [lat, lng], label);
+        }
+        updateSelectionState();
+        if (shouldAutoSubmit) {
+            scheduleAutoSubmit();
+        }
+    }
+
+    function clearSelection(kind) {
+        if (kind === "origin") {
+            originLngInput.value = "";
+            originLatInput.value = "";
+            sourceRoadInput.value = "";
+            originPreview.textContent = "No origin selected yet";
+            if (originMarker) {
+                map.removeLayer(originMarker);
+                originMarker = null;
+            }
+        } else {
+            destinationLngInput.value = "";
+            destinationLatInput.value = "";
+            targetRoadInput.value = "";
+            destinationPreview.textContent = "No destination selected yet";
+            if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+                destinationMarker = null;
+            }
         }
         updateSelectionState();
     }
 
-    function attachSearch(displayInput, hiddenInput, resultBox) {
+    function attachSearch(inputEl, resultEl, kind) {
         async function loadResults(query) {
             if (!query || query.trim().length < 2) {
-                resultBox.style.display = "none";
-                resultBox.innerHTML = "";
+                resultEl.style.display = "none";
+                resultEl.innerHTML = "";
                 return;
             }
 
@@ -488,61 +764,95 @@
             const payload = await response.json();
             const results = payload.results || [];
 
-            resultBox.innerHTML = "";
+            resultEl.innerHTML = "";
             if (!results.length) {
-                resultBox.style.display = "none";
+                resultEl.style.display = "none";
                 return;
             }
 
             results.forEach(item => {
                 const div = document.createElement("div");
                 div.className = "search-item";
-                div.textContent = item.label;
+                div.innerHTML = `
+                    <div><strong>${item.label}</strong></div>
+                    <div class="search-kind">${item.kind === "place" ? "Live place result" : "Road segment result"}</div>
+                `;
                 div.addEventListener("click", () => {
-                    const kind = hiddenInput.id === "source" ? "source" : "target";
-                    applySelection(kind, item.id, item.label);
-                    resultBox.style.display = "none";
-                    resultBox.innerHTML = "";
+                    applySelection(kind, item);
+                    resultEl.style.display = "none";
+                    resultEl.innerHTML = "";
                 });
-                resultBox.appendChild(div);
+                resultEl.appendChild(div);
             });
-            resultBox.style.display = "block";
+            resultEl.style.display = "block";
         }
 
-        displayInput.addEventListener("input", () => {
-            hiddenInput.value = "";
-            if (hiddenInput.id === "source") {
-                sourcePreview.textContent = "No source selected yet";
-            } else {
-                targetPreview.textContent = "No target selected yet";
-            }
-            loadResults(displayInput.value);
-            updateSelectionState();
+        inputEl.addEventListener("input", () => {
+            clearSelection(kind);
+            loadResults(inputEl.value);
         });
 
-        displayInput.addEventListener("blur", () => {
+        inputEl.addEventListener("blur", () => {
             setTimeout(() => {
-                resultBox.style.display = "none";
+                resultEl.style.display = "none";
             }, 150);
         });
     }
 
-    attachSearch(sourceDisplay, sourceInput, sourceResults);
-    attachSearch(targetDisplay, targetInput, targetResults);
+    attachSearch(originNameInput, originResults, "origin");
+    attachSearch(destinationNameInput, destinationResults, "destination");
 
     quickPicks.forEach(button => {
         button.addEventListener("click", () => {
-            const roadId = button.dataset.roadId;
-            const label = button.dataset.roadLabel;
-            const kind = !sourceInput.value || nextSelection === "source" ? "source" : "target";
-            applySelection(kind, roadId, label);
+            const item = {
+                label: button.dataset.roadLabel,
+                lng: Number(button.dataset.roadLng),
+                lat: Number(button.dataset.roadLat),
+                road_id: button.dataset.roadId
+            };
+            const kind = !originLngInput.value || nextSelection === "origin" ? "origin" : "destination";
+            applySelection(kind, item);
         });
     });
 
-    L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors &copy; CARTO" }
-    ).addTo(map);
+    swapButton.addEventListener("click", () => {
+        const originSnapshot = {
+            label: originNameInput.value,
+            lng: originLngInput.value,
+            lat: originLatInput.value,
+            road_id: sourceRoadInput.value
+        };
+        const destinationSnapshot = {
+            label: destinationNameInput.value,
+            lng: destinationLngInput.value,
+            lat: destinationLatInput.value,
+            road_id: targetRoadInput.value
+        };
+
+        applySelection("origin", destinationSnapshot, false);
+        applySelection("destination", originSnapshot, false);
+        scheduleAutoSubmit();
+    });
+
+    if (mapboxPublicToken) {
+        L.tileLayer(
+            `https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/512/{z}/{x}/{y}@2x?access_token=${mapboxPublicToken}`,
+            {
+                tileSize: 512,
+                zoomOffset: -1,
+                maxZoom: 18,
+                attribution: "&copy; OpenStreetMap contributors &copy; Mapbox"
+            }
+        ).addTo(map);
+    } else {
+        L.tileLayer(
+            "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+            {
+                maxZoom: 19,
+                attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+            }
+        ).addTo(map);
+    }
 
     function riskColor(risk) {
         if (risk >= 0.8) return "#c65d2e";
@@ -551,75 +861,113 @@
     }
 
     let baseBounds = null;
-
     if (roadsGeoJson && roadsGeoJson.features && roadsGeoJson.features.length) {
-        const baseLayer = L.geoJSON(roadsGeoJson, {
+        baseLayer = L.geoJSON(roadsGeoJson, {
             style: feature => ({
                 color: riskColor(Number(feature.properties?.flood_risk_percentile || 0)),
-                weight: 1.4,
-                opacity: 0.45
+                weight: riskOverlayVisible ? 1.0 : 0.25,
+                opacity: riskOverlayVisible ? 0.24 : 0.03
             }),
             onEachFeature: function(feature, layer) {
                 const props = feature.properties || {};
                 const roadId = props.road_id || props.resolved_road_id || "";
-                const roadName = props.name || props.road_name || "";
-                const label = roadName ? `${roadName} (${roadId})` : roadId;
-                layer.bindPopup(label || "Road segment");
+                const roadName = props.name || props.road_name || roadId || "Road segment";
+                layer.bindPopup(roadName);
                 layer.on("click", function() {
-                    if (!roadId) return;
-                    const kind = !sourceInput.value || nextSelection === "source" ? "source" : "target";
-                    applySelection(kind, roadId, label, feature);
+                    const geometry = feature.geometry || {};
+                    const coords = geometry.coordinates || [];
+                    let center = null;
+                    if (geometry.type === "LineString" && coords.length) {
+                        const mid = coords[Math.floor(coords.length / 2)];
+                        center = { lng: mid[0], lat: mid[1] };
+                    } else if (geometry.type === "MultiLineString" && coords.length && coords[0].length) {
+                        const midLine = coords[Math.floor(coords.length / 2)];
+                        const mid = midLine[Math.floor(midLine.length / 2)];
+                        center = { lng: mid[0], lat: mid[1] };
+                    }
+                    if (!center) return;
+                    const kind = !originLngInput.value || nextSelection === "origin" ? "origin" : "destination";
+                    applySelection(kind, {
+                        label: roadName,
+                        lng: center.lng,
+                        lat: center.lat,
+                        road_id: roadId
+                    });
                 });
             }
         }).addTo(map);
         baseBounds = baseLayer.getBounds();
     }
 
-    if (baselineRouteGeoJson && baselineRouteGeoJson.features && baselineRouteGeoJson.features.length) {
-        L.geoJSON(baselineRouteGeoJson, {
-            style: {
-                color: "#64748b",
-                weight: 4,
-                opacity: 0.75,
-                dashArray: "8,6"
-            }
-        }).addTo(map);
+    function setRiskOverlayVisibility(visible) {
+        riskOverlayVisible = visible;
+        if (toggleRiskOverlayButton) {
+            toggleRiskOverlayButton.textContent = visible ? "Hide risk overlay" : "Show risk overlay";
+        }
+        if (!baseLayer) return;
+        baseLayer.setStyle(feature => ({
+            color: riskColor(Number(feature.properties?.flood_risk_percentile || 0)),
+            weight: visible ? 1.0 : 0.25,
+            opacity: visible ? 0.24 : 0.03
+        }));
     }
 
-    if (routeGeoJson && routeGeoJson.features && routeGeoJson.features.length) {
-        const routeLayer = L.geoJSON(routeGeoJson, {
+    if (toggleRiskOverlayButton) {
+        toggleRiskOverlayButton.addEventListener("click", () => {
+            setRiskOverlayVisibility(!riskOverlayVisible);
+        });
+    }
+
+    if (mapboxPrimaryGeoJson && mapboxPrimaryGeoJson.features && mapboxPrimaryGeoJson.features.length) {
+        const fastestLayer = L.geoJSON(mapboxPrimaryGeoJson, {
+            style: {
+                color: "#475569",
+                weight: 5,
+                opacity: 0.85
+            }
+        }).addTo(map);
+        const bounds = fastestLayer.getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [24, 24] });
+        }
+    }
+
+    if (Array.isArray(mapboxAlternativeGeoJsons)) {
+        mapboxAlternativeGeoJsons.forEach((geojson, index) => {
+            if (!geojson || !geojson.features || !geojson.features.length) return;
+            L.geoJSON(geojson, {
+                style: {
+                    color: index === 0 ? "#f59e0b" : "#fbbf24",
+                    weight: 4,
+                    opacity: 0.7,
+                    dashArray: "8,6"
+                }
+            }).addTo(map);
+        });
+    }
+
+    if (resilienceGeoJson && resilienceGeoJson.features && resilienceGeoJson.features.length) {
+        L.geoJSON(resilienceGeoJson, {
             style: {
                 color: "#1d4ed8",
                 weight: 5,
                 opacity: 0.95
-            },
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties || {};
-                layer.bindPopup(props.road_id || props.resolved_road_id || "Route segment");
             }
         }).addTo(map);
+    }
 
-        const routeBounds = routeLayer.getBounds();
-        if (routeBounds.isValid()) {
-            map.fitBounds(routeBounds, { padding: [20, 20] });
-        } else if (baseBounds && baseBounds.isValid()) {
-            map.fitBounds(baseBounds, { padding: [20, 20] });
-        }
+    if (originPoint) {
+        addMarker("origin", originPoint, originNameInput.value || "Origin");
+    }
+    if (destinationPoint) {
+        addMarker("destination", destinationPoint, destinationNameInput.value || "Destination");
+    }
 
-        const routeFeatures = routeGeoJson.features || [];
-        const firstFeature = routeFeatures[0];
-        const lastFeature = routeFeatures[routeFeatures.length - 1];
-
-        if (firstFeature) {
-            setMarker("source", firstFeature);
-        }
-        if (lastFeature) {
-            setMarker("target", lastFeature);
-        }
-    } else if (baseBounds && baseBounds.isValid()) {
+    if ((!mapboxPrimaryGeoJson || !mapboxPrimaryGeoJson.features || !mapboxPrimaryGeoJson.features.length) && baseBounds && baseBounds.isValid()) {
         map.fitBounds(baseBounds, { padding: [20, 20] });
     }
 
+    setRiskOverlayVisibility(false);
     updateSelectionState();
 </script>
 {% endblock %}

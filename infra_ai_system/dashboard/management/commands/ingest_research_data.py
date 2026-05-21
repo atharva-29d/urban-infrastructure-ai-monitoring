@@ -110,7 +110,7 @@ class Command(BaseCommand):
                 "run_kind": ExperimentRun.RunKind.OPTIMIZATION,
                 "status": ExperimentRun.Status.COMPLETED,
                 "scenario": scenario,
-                "metrics": {"source": "data/graphs/opt_vs_random_scale_1.2.json"},
+                "metrics": self.load_optimization_summary(graphs_dir / "opt_vs_random_scale_1.2.json"),
                 "input_summary": {
                     "critical_roads": "data/graphs/critical_roads.csv",
                     "optimization_file": "data/graphs/opt_vs_random_scale_1.2.json",
@@ -292,8 +292,17 @@ class Command(BaseCommand):
                 budget_k=row["K"],
                 defaults={
                     "mean_failed": row["greedy_failed"],
-                    "std_failed": 0.0,
-                    "metadata": {"baseline": "random", "comparison_value": row["random_failed"]},
+                    "std_failed": row.get("greedy_std_failed", 0.0),
+                    "resilience_score": row.get("greedy_resilience"),
+                    "metadata": {
+                        "baseline": "random",
+                        "comparison_value": row["random_failed"],
+                        "failed_reduction_vs_random": row.get("failed_reduction_vs_random"),
+                        "resilience_gain_vs_random": row.get("resilience_gain_vs_random"),
+                        "initial_failures": row.get("greedy_initial_failures"),
+                        "peak_step_failures": row.get("greedy_peak_step_failures"),
+                        "replications": row.get("replications"),
+                    },
                 },
             )
 
@@ -303,10 +312,39 @@ class Command(BaseCommand):
                 budget_k=row["K"],
                 defaults={
                     "mean_failed": row["random_failed"],
-                    "std_failed": 0.0,
-                    "metadata": {"baseline": "greedy", "comparison_value": row["greedy_failed"]},
+                    "std_failed": row.get("random_std_failed", 0.0),
+                    "resilience_score": row.get("random_resilience"),
+                    "metadata": {
+                        "baseline": "greedy",
+                        "comparison_value": row["greedy_failed"],
+                        "failed_reduction_vs_greedy": row.get("failed_reduction_vs_random"),
+                        "resilience_gap_vs_greedy": row.get("resilience_gain_vs_random"),
+                        "initial_failures": row.get("random_initial_failures"),
+                        "peak_step_failures": row.get("random_peak_step_failures"),
+                        "replications": row.get("replications"),
+                    },
                 },
             )
+
+    def load_optimization_summary(self, path: Path):
+        if not path.exists():
+            return {}
+
+        with open(path, "r", encoding="utf-8") as file:
+            results = json.load(file)
+
+        if not results:
+            return {}
+
+        best_row = max(results, key=lambda row: row.get("failed_reduction_vs_random", float("-inf")))
+        return {
+            "source": "data/graphs/opt_vs_random_scale_1.2.json",
+            "budgets_evaluated": [row.get("K") for row in results],
+            "best_budget_k": best_row.get("K"),
+            "best_failed_reduction_vs_random": best_row.get("failed_reduction_vs_random"),
+            "best_resilience_gain_vs_random": best_row.get("resilience_gain_vs_random"),
+            "replications": best_row.get("replications"),
+        }
 
     def upsert_artifact(self, run, label, artifact_kind, relative_path, file_format):
         artifact, _ = RunArtifact.objects.update_or_create(

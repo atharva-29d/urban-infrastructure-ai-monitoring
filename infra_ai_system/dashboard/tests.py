@@ -205,8 +205,8 @@ class DashboardViewsTest(TestCase):
     def test_route_planner_page_renders(self):
         response = self.client.get(reverse("route_planner"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Safe Rerouting Planner")
-        self.assertContains(response, "Find reroute")
+        self.assertContains(response, "Resilience-Aware Smart Rerouting")
+        self.assertContains(response, "Generate Smart Routes")
 
     def test_route_search_endpoint_renders_json(self):
         response = self.client.get(reverse("route_search"), {"q": "road_5"})
